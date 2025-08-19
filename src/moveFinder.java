@@ -16,21 +16,31 @@ public class moveFinder{
         }
         return pM;
     }
-    public static int evaluation (Piece[][] board){
-
+    public static int evaluation (Piece[][] board, boolean isWhite){
         int score = 0;
         for (int y = 0; y < 8; y++) {
             for (int x = 0; x < 8; x++) {
                 Piece p = board[y][x];
                 Koordinaten k = new Koordinaten(x,y);
                 if (p != null) {
-                    if (p.isWhite()) {
-                        score += p.getValue();
-                        score += Evaluation.evalWithPosition(k, board, true);
-                    }
-                    else {
-                        score -= p.getValue();
-                        score -= Evaluation.evalWithPosition(k, board, false);
+                    if (isWhite) {
+                        if (p.isWhite()) {
+                            score += p.getValue();
+                            score += Evaluation.evalWithPosition(k, board, true);
+                        }
+                        else {
+                            score -= p.getValue();
+                            score -= Evaluation.evalWithPosition(k, board, false);
+                        }
+                    } else {
+                        if (p.isWhite()) {
+                            score -= p.getValue();
+                            score -= Evaluation.evalWithPosition(k, board, true);
+                        }
+                        else {
+                            score += p.getValue();
+                            score += Evaluation.evalWithPosition(k, board, false);
+                        }
                     }
                 }
             }
@@ -39,30 +49,22 @@ public class moveFinder{
     }
     public static ArrayList<Zug> findBestMoves(Piece[][] board, int depth, boolean isWhite, ArrayList<Zug> orderedMoves){
 
-//        ArrayList<Zug> moves = possibleMoves(isWhite, board);
-//        Set<Zug> set = new LinkedHashSet<>();
-        //set.addAll(orderedMoves);
-        //set.addAll(moves);
-
         TreeMap<Integer, Zug> bestMoves = new TreeMap<>();
-//        int bestScore = isWhite ? Integer.MIN_VALUE : Integer.MAX_VALUE;
-        Zug bestMove = orderedMoves.getFirst();
 
         if(orderedMoves.isEmpty()) return null;
+
+        Zug bestMove = orderedMoves.getFirst();
 
         for(Zug zug : orderedMoves){// do move und undo move damit nicht dauerhaft neue teure kopien des boards erstellt werden
             MoveInfo info = saveMoveInfo(zug, board);
             doMove(zug, board);
-            ArrayList<Zug> nextMoves = possibleMoves(!isWhite, board);
-//            MoveOrdering.orderMoves(nextMoves, board, !isWhite);
 
-
-            int score = minimax(board, depth - 1, Integer.MIN_VALUE, Integer.MAX_VALUE, !isWhite, nextMoves);
+            int score = negamax(board, depth, Integer.MIN_VALUE, Integer.MAX_VALUE, !isWhite);
 
             undoMove(zug, board, info);
 
             if(isWhite){
-                bestMoves.put(-score, zug);
+                bestMoves.put(score, zug);
             } else {
                 bestMoves.put(score, zug);
             }
@@ -71,179 +73,74 @@ public class moveFinder{
         ArrayList<Zug> temp = new ArrayList<>(bestMoves.values());
         return temp;
     }
-    private static int minimax(Piece [][] board, int depth, int alpha, int beta, boolean isWhite, ArrayList<Zug> moves) {
-
-        boolean inCheck = Spiel.inCheck(board, isWhite);
-
-        if (moves.isEmpty()) {
-            if (inCheck) return isWhite ? Integer.MIN_VALUE : Integer.MAX_VALUE;
-            else return 0; // Patt
-        }
+    private static int negamax(Piece [][] board, int depth, int alpha, int beta, boolean isWhite) {
 
         if (depth == 0)
             return qSearch(board, alpha, beta, isWhite);
 
-        if(isWhite){// do move und undo move damit nicht dauerhaft neue teure kopien des boards erstellt werden
-            int maxEval = Integer.MIN_VALUE;
-            for (Zug zug : moves) {
-                MoveInfo info = saveMoveInfo(zug, board);
-                doMove(zug, board);
-                ArrayList<Zug> newMoves = possibleMoves(false, board);
-                MoveOrdering.orderMoves(newMoves, board, false);
-                int eval = 0;
-//                if(depth == 1) {
-//                    if (Spiel.isCapture(zug, board))
-//                        eval = minimax(board, depth, alpha, beta, false, newMoves);
-//                    else
-//                        eval = minimax(board, depth -1, alpha, beta, false, newMoves);
-//                }
-//                else
-                eval = minimax(board, depth -1, alpha, beta, false, newMoves);
-                undoMove(zug, board, info);
-                maxEval = Math.max(maxEval, eval);
-                if (maxEval >= beta)
-                    break; // beta cut-off
-                alpha = Math.max(alpha, maxEval);
+        ArrayList<Zug> possibleMoves = possibleMoves(isWhite, board);
+        MoveOrdering.orderMoves(possibleMoves, board, isWhite);
+
+        if (possibleMoves.isEmpty()) {
+            if (Spiel.inCheck(board, isWhite)) {
+                return isWhite ? Integer.MIN_VALUE : Integer.MAX_VALUE;
+            } else {
+                return 0;
             }
-            return maxEval;
-        } else {// do move und undo move damit nicht dauerhaft neue teure kopien des boards erstellt werden
-            int minEval = Integer.MAX_VALUE;
-            for (Zug zug : moves) {
-                MoveInfo info = saveMoveInfo(zug, board);
-                doMove(zug, board);
-                ArrayList<Zug> newMoves = possibleMoves(true, board);
-                MoveOrdering.orderMoves(newMoves, board, true);
-                int eval = 0;
-//                if(depth == 1) {
-//                    if (Spiel.isCapture(zug, board))
-//                        eval = minimax(board, depth, alpha, beta, true, newMoves);
-//                    else
-//                        eval = minimax(board, depth -1, alpha, beta, true, newMoves);
-//                }
-//                else
-                eval = minimax(board, depth -1, alpha, beta, true, newMoves);
-                undoMove(zug, board, info);
-                minEval = Math.min(minEval, eval);
-                if (minEval <= alpha)
-                    break; // alpha cut-off
-                beta = Math.min(beta, minEval);
-            }
-            return minEval;
         }
+
+        int value = Integer.MIN_VALUE;
+        for (Zug zug : possibleMoves){
+            MoveInfo info = saveMoveInfo(zug, board);
+            doMove(zug, board);
+            value = Math.max(value, -negamax(board, depth - 1, -beta, -alpha, !isWhite ));
+            undoMove(zug, board, info);
+            alpha = Math.max(alpha, value);
+            if(alpha >= beta)
+                break; //alpha beta cutoff
+        }
+        return value;
     }
+
     private static int qSearch(Piece [][] board, int alpha, int beta, boolean isWhite){
-//        int currentEval = evaluation(board);
-//        //alpha beta für schauen ob wir den besten zug gefunden haben
-//        if (isWhite) {
-//            if(currentEval >=  beta)
-//                return currentEval;
-//            if(currentEval > alpha)
-//                alpha = currentEval;
-//        } else {
-//            if(currentEval <= alpha)
-//                return currentEval;
-//            if(currentEval < beta)
-//                beta = currentEval;
-//        }
 
-        //nur züge mit schach oder figuren capture
+        int static_eval = evaluation(board, isWhite);
+
+        int best_value = static_eval;
+
+        if( best_value >= beta ) {
+            return best_value;
+        }
+
+        if( best_value > alpha )
+            alpha = best_value;
+
         ArrayList<Zug> moves = possibleMoves(isWhite, board);
-
-        boolean inCheck = Spiel.inCheck(board, isWhite);
-
-        if (moves.isEmpty()) {
-            if (inCheck) return isWhite ? Integer.MIN_VALUE : Integer.MAX_VALUE;// schachmatt
-            else return 0; // Patt
-        }
-
         ArrayList<Zug> forcingMoves = new ArrayList<>();
+
         for(Zug zug : moves){
-            //falls zug schach oder schlag ist oder man im schach steht
-            if(/*Spiel.inCheckAfterMove(zug, board, isWhite) || Spiel.inCheckAfterMove(zug, board, !isWhite) ||*/ Spiel.isCapture(zug, board)){
+            if(Spiel.isCapture(zug, board))
                 forcingMoves.add(zug);
-            }
         }
 
-        if (forcingMoves.isEmpty())
-            return evaluation(board);
+        for(Zug zug : forcingMoves)  {
 
-        //qSearch(board, alpha, beta, isWhite);
+            MoveInfo info = saveMoveInfo(zug, board);
+            doMove(zug, board);
 
-        if(isWhite){// do move und undo move damit nicht dauerhaft neue teure kopien des boards erstellt werden
-            int maxEval = Integer.MIN_VALUE;
-            for (Zug zug : moves) {
-                MoveInfo info = saveMoveInfo(zug, board);
-                doMove(zug, board);
-                MoveOrdering.orderMoves(forcingMoves, board, false);
-                int eval = 0;
-                eval = qSearch(board, alpha, beta, false);
-                undoMove(zug, board, info);
-                maxEval = Math.max(maxEval, eval);
-                if (maxEval >= beta)
-                    break; // beta cut-off
-                alpha = Math.max(alpha, maxEval);
+            int score = -qSearch(board, -beta, -alpha, !isWhite);
+
+            undoMove(zug, board, info);
+
+            if( score >= beta ) {
+                return score;
             }
-            return maxEval;
-        } else {// do move und undo move damit nicht dauerhaft neue teure kopien des boards erstellt werden
-            int minEval = Integer.MAX_VALUE;
-            for (Zug zug : moves) {
-                MoveInfo info = saveMoveInfo(zug, board);
-                doMove(zug, board);
-                MoveOrdering.orderMoves(forcingMoves, board, true);
-                int eval = 0;
-                eval = qSearch(board, alpha, beta, true);
-                undoMove(zug, board, info);
-                minEval = Math.min(minEval, eval);
-                if (minEval <= alpha)
-                    break; // alpha cut-off
-                beta = Math.min(beta, minEval);
-            }
-            return minEval;
+            if( score > best_value )
+                best_value = score;
+            if( score > alpha )
+                alpha = score;
         }
-
-//        MoveOrdering.orderMoves(forcingMoves, board, isWhite);
-        //int maxEval = Integer.MIN_VALUE;
-        //            for (Zug zug : moves) {
-        //                MoveInfo info = saveMoveInfo(zug, board);
-        //                doMove(zug, board);
-        //                ArrayList<Zug> newMoves = possibleMoves(false, board);
-        ////                MoveOrdering.orderMoves(newMoves, board, false);
-        //                int eval = minimax(board, depth - 1, alpha, beta, false, newMoves);
-        //                undoMove(zug, board, info);
-        //                maxEval = Math.max(maxEval, eval);
-        //                if (maxEval >= beta)
-        //                    break; // beta cut-off
-        //                alpha = Math.max(alpha, maxEval);
-        //            }
-
-        //normal minimax aber nur mit forcingMoves
-//        if(isWhite){
-//            int maxEval = Integer.MIN_VALUE;
-//            for (Zug zug : moves) {
-//                MoveInfo info = saveMoveInfo(zug, board);
-//                doMove(zug, board);
-//                int eval = qSearch(board, alpha, beta,false);
-//                undoMove(zug, board, info);
-//                maxEval = Math.max(maxEval, eval);
-//                if (maxEval >= beta)
-//                    break; // beta cut-off
-//                alpha = Math.max(alpha, maxEval);
-//            }
-//            return maxEval;
-//        } else {
-//            int minEval = Integer.MAX_VALUE;
-//            for (Zug zug : moves) {
-//                MoveInfo info = saveMoveInfo(zug, board);
-//                doMove(zug, board);
-//                int eval = qSearch(board, alpha, beta, true);
-//                undoMove(zug, board, info);
-//                minEval = Math.min(minEval, eval);
-//                if (minEval <= alpha)
-//                    break; // alpha cut-off
-//                beta = Math.min(beta, minEval);
-//            }
-//            return minEval;
-//        }
+        return best_value;
     }
     public static void doMove(Zug zug, Piece[][] board) {
         boolean bauerDoppelZug = bauerDoppel(zug, board);

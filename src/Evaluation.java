@@ -22,7 +22,9 @@ public class Evaluation {
             {-36, -26, -12,  -1,  9, -7,   6, -23},
             {-45, -25, -16, -17,  3,  0,  -5, -33},
             {-44, -16, -20,  -9, -1, 11,  -6, -71},
-            {-19, -13,   1,  17, 16,  7, -37, -26}};
+            {-19, -13,   1,  2, 16,  -12, -37, -26}};
+    // heat map für turm auch angepasst damit er weniger gerne einfach ohne zu rochieren auf den rochade platz geht
+    // original: {-19, -13,   1,  17, 16,  7, -37, -26}};
     static int[][] mg_queen = {
             {-28,   0,  29,  12,  59,  44,  43,  45},
             {-24, -39,  -5,   1, -16,  57,  28,  54},
