@@ -147,12 +147,23 @@ public class MoveFinder {
             alpha = best_value;
 
         ArrayList<Zug> moves = possibleMoves(isWhite, board);
+
+        if (moves.isEmpty()) {
+            if (Spiel.inCheck(board, isWhite)) {
+                return isWhite ? Integer.MIN_VALUE : Integer.MAX_VALUE;
+            } else {
+                return 0;
+            }
+        }
+
         ArrayList<Zug> forcingMoves = new ArrayList<>();
 
         for(Zug zug : moves){
             if(Spiel.isCapture(zug, board))
                 forcingMoves.add(zug);
         }
+
+        MoveOrdering.orderMoves(forcingMoves, board, isWhite);
 
         for(Zug zug : forcingMoves)  {
 
