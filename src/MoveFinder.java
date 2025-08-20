@@ -1,7 +1,9 @@
 import java.util.*;
 
-public class moveFinder{
-    public moveFinder(){
+public class MoveFinder {
+    private static long nodes = 0;     // Knoten-Zähler
+    private static long startTime = 0; // Startzeit für Messung
+    public MoveFinder(){
 
     }
     public static ArrayList<Zug> possibleMoves(boolean white, Piece[][] board) {
@@ -48,6 +50,8 @@ public class moveFinder{
         return score;
     }
     public static ArrayList<Zug> findBestMoves(Piece[][] board, int depth, boolean isWhite, ArrayList<Zug> orderedMoves){
+        nodes = 0;
+        startTime = System.currentTimeMillis();
 
         TreeMap<Integer, Zug> bestMoves = new TreeMap<>();
 
@@ -56,12 +60,20 @@ public class moveFinder{
         Zug bestMove = orderedMoves.getFirst();
 
         for(Zug zug : orderedMoves){// do move und undo move damit nicht dauerhaft neue teure kopien des boards erstellt werden
+
             MoveInfo info = saveMoveInfo(zug, board);
-            doMove(zug, board);
+            boolean success = doMove(zug, board);
+
+            if(Spiel.inCheck(board, isWhite) && success){
+                undoMove(zug, board, info);
+                continue;
+            }
 
             int score = negamax(board, depth, Integer.MIN_VALUE, Integer.MAX_VALUE, !isWhite);
 
-            undoMove(zug, board, info);
+            if (success) {
+                undoMove(zug, board, info);
+            }
 
             if(isWhite){
                 bestMoves.put(score, zug);
@@ -70,10 +82,18 @@ public class moveFinder{
             }
         }
 
+        long elapsed = System.currentTimeMillis() - startTime;
+        double nps = (nodes * 1000.0) / (elapsed + 1);
+        System.out.println("Nodes: " + nodes);
+        System.out.println("Time elapsed: " + elapsed + " ms");
+        System.out.println("Speed: " + (long)nps + " nodes/s");
+
         ArrayList<Zug> temp = new ArrayList<>(bestMoves.values());
         return temp;
     }
     private static int negamax(Piece [][] board, int depth, int alpha, int beta, boolean isWhite) {
+
+        nodes++;
 
         if (depth == 0)
             return qSearch(board, alpha, beta, isWhite);
@@ -92,10 +112,21 @@ public class moveFinder{
         int value = Integer.MIN_VALUE;
         for (Zug zug : possibleMoves){
             MoveInfo info = saveMoveInfo(zug, board);
-            doMove(zug, board);
+            boolean success = doMove(zug, board);
+
+            if(Spiel.inCheck(board, isWhite) && success){
+                undoMove(zug, board, info);
+                continue;
+            }
+
             value = Math.max(value, -negamax(board, depth - 1, -beta, -alpha, !isWhite ));
-            undoMove(zug, board, info);
+
+            if (success) {
+                undoMove(zug, board, info);
+            }
+
             alpha = Math.max(alpha, value);
+
             if(alpha >= beta)
                 break; //alpha beta cutoff
         }
@@ -126,11 +157,18 @@ public class moveFinder{
         for(Zug zug : forcingMoves)  {
 
             MoveInfo info = saveMoveInfo(zug, board);
-            doMove(zug, board);
+            boolean success = doMove(zug, board);
+
+            if(Spiel.inCheck(board, isWhite) && success){
+                undoMove(zug, board, info);
+                continue;
+            }
 
             int score = -qSearch(board, -beta, -alpha, !isWhite);
 
-            undoMove(zug, board, info);
+            if (success) {
+                undoMove(zug, board, info);
+            }
 
             if( score >= beta ) {
                 return score;
@@ -142,24 +180,31 @@ public class moveFinder{
         }
         return best_value;
     }
-    public static void doMove(Zug zug, Piece[][] board) {
+    public static boolean doMove(Zug zug, Piece[][] board) {
+        boolean moveExecuted = false;
         boolean bauerDoppelZug = bauerDoppel(zug, board);
 
         if (rochade(zug, board)) {
-            if (kurze(zug)) { // kurze Rochade
+            if(kurze(zug) && kurzePossible(zug, board)) { // kurze Rochade
                 kurzeRochade(zug, board);
-            } else { // lange Rochade
+                moveExecuted = true;
+            } else if(langePossible(zug, board)){ // lange Rochade
                 langeRochade(zug, board);
+                moveExecuted = true;
+            } else {
+                return false;
             }
         }
 
         // En-Passant
         if (enPassant(zug, board)) {
             enPassantExe(zug, board);
+            moveExecuted = true;
         }
 
         //Normaler Zug
         normalTurnExe(zug, board);
+        moveExecuted = true;
 
         //Promotion
         if (promotion(zug, board)) {
@@ -179,6 +224,7 @@ public class moveFinder{
         if (board[zug.endY][zug.endX] instanceof Koenig k) {
             k.setKannRochieren(false);
         }
+        return moveExecuted;
     }
     public static MoveInfo saveMoveInfo(Zug zug, Piece[][] board) {
         MoveInfo info = new MoveInfo();
@@ -261,11 +307,33 @@ public class moveFinder{
     private static boolean kurze(Zug zug){
         return zug.endX > zug.startX;
     }
+    private static boolean kurzePossible(Zug zug, Piece [][] board){
+        int startX = zug.startX;
+        int startY = zug.startY;
+        boolean gegner = !board[startY][startX].isWhite();
+        if(!Spiel.isSquareAttacked(board, startX, startY, gegner)
+                && !Spiel.isSquareAttacked(board, startX + 1, startY, gegner)
+                && !Spiel.isSquareAttacked(board, startX + 2, startY, gegner)){
+            return true;
+        }
+        return false;
+    }
     public static void kurzeRochade(Zug zug, Piece [][] board){
         ((Koenig) board[zug.startY][zug.startX]).setKannRochieren(false);
         ((Turm) board[zug.startY][7]).setKannRochieren(false);
         board[zug.endY][5] = board[zug.endY][7];
         board[zug.endY][7] = new Empty();
+    }
+    private static boolean langePossible(Zug zug, Piece [][] board){
+        int startX = zug.startX;
+        int startY = zug.startY;
+        boolean gegner = !board[startY][startX].isWhite();
+        if(!Spiel.isSquareAttacked(board, startX, startY, gegner)
+                && !Spiel.isSquareAttacked(board, startX - 1, startY, gegner)
+                && !Spiel.isSquareAttacked(board, startX - 2, startY, gegner)){
+            return true;
+        }
+        return false;
     }
     public static void langeRochade(Zug zug, Piece [][] board){
         ((Koenig) board[zug.startY][zug.startX]).setKannRochieren(false);

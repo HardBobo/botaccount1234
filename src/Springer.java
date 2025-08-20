@@ -44,9 +44,11 @@ public class Springer extends Piece {
         Zug zug;
 
         for (int[] zug1 : zuege) {
+            if(!Spiel.imBrett(x + zug1[0], y + zug1[1]))
+                continue;
             zug = new Zug(x, y, x + zug1[0], y + zug1[1]);
 
-            if (Spiel.isValid(zug, this.isWhite(), board)) {
+            if (Spiel.isPseudoLegal(zug, this.isWhite(), board)) {
                 moegliche.add(zug);
             }
         }

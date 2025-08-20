@@ -14,44 +14,6 @@ public class Bauer extends Piece {
     public void setEnPassantPossible(boolean wert){
         this.enPassantPossible = wert;
     }
-    public boolean istZugMoeglich(int startX, int startY, int zielX, int zielY, char promoteTo, Piece[][] board) {
-        int richtung = isWhite() ? -1 : 1; //weiß nach oben schwarz nach unten
-
-        int dy = zielY - startY;
-        int dx = zielX - startX;
-
-        Piece ziel = board[zielY][zielX];
-
-        // normal
-        if (dx == 0 && dy == richtung && ziel instanceof Empty) {
-            if(zielY == 7 || zielY == 0){
-                return promoteTo == 'q' || promoteTo == 'n' || promoteTo == 'b' || promoteTo == 'r';
-            }
-            return true;
-        }
-
-        // doppelter
-        if (dx == 0 && dy == 2 * richtung && (startY == 1 || startY == 6)) {
-            int zwischenschrittY = startY + richtung;
-            if (board[zwischenschrittY][startX] instanceof Empty && ziel instanceof Empty) {
-                return true;
-            }
-        }
-
-        // schlagen
-        if (Math.abs(dx) == 1 && dy == richtung && !(ziel instanceof Empty) && ziel.isWhite() != this.isWhite()) {
-            if(zielY == 7 || zielY == 0){
-                return promoteTo == 'q' || promoteTo == 'n' || promoteTo == 'b' || promoteTo == 'r';
-            }
-            return true;
-        }
-
-        // en passant
-        if (Math.abs(dx) == 1 && dy == richtung && board[startY][zielX] instanceof Bauer gegnerBauer) {
-            return gegnerBauer.isWhite() != this.isWhite() && gegnerBauer.isEnPassantPossible();
-        }
-        return false;
-    }
     @Override
     public List<Koordinaten> bedrohteFelder(int x, int y, Piece[][] board) {
         List<Koordinaten> bedrohte = new ArrayList<>();
@@ -78,41 +40,51 @@ public class Bauer extends Piece {
         List<Zug> moegliche = new ArrayList<>();
 
         int richtung = this.isWhite() ? -1 : 1;
+        int endreihe = this.isWhite() ? 0 : 7;
 
-        Zug [] zuege = new Zug[4];
-        Zug [] promotions = new Zug[12];
-        if(y + richtung == 7 || y + richtung == 0) {
-            promotions[0] = new Zug(x, y, x, y + richtung, 'q');
-            promotions[1] = new Zug(x, y, x, y + richtung, 'n');
-            promotions[2] = new Zug(x, y, x, y + richtung, 'r');
-            promotions[3] = new Zug(x, y, x, y + richtung, 'b');
-            promotions[4] = new Zug(x, y, x + 1, y + richtung, 'q');
-            promotions[5] = new Zug(x, y, x + 1, y + richtung, 'n');
-            promotions[6] = new Zug(x, y, x + 1, y + richtung, 'r');
-            promotions[7] = new Zug(x, y, x + 1, y + richtung, 'b');
-            promotions[8] = new Zug(x, y, x - 1, y + richtung, 'q');
-            promotions[9] = new Zug(x, y, x - 1, y + richtung, 'n');
-            promotions[10] = new Zug(x, y, x - 1, y + richtung, 'r');
-            promotions[11] = new Zug(x, y, x - 1, y + richtung, 'b');
-        } else {
-            zuege[0] = new Zug(x, y, x, y + richtung);
-            zuege[1] = new Zug(x, y, x, y + (2 * richtung));
-            zuege[2] = new Zug(x, y, x + 1, y + richtung);
-            zuege[3] = new Zug(x, y, x - 1, y + richtung);
+        if (Spiel.imBrett(x, y + richtung)
+                && board[y + richtung][x] instanceof Empty) {
+            if (y + richtung == endreihe) {
+                addPromotions(moegliche, x, y, x, y + richtung);
+            } else {
+                moegliche.add(new Zug(x, y, x, y + richtung));
+            }
         }
-        if(y + richtung == 7 || y + richtung == 0) {
-            for (Zug zug : promotions) {
-                if (Spiel.isValid(zug, this.isWhite(), board)) {
-                    moegliche.add(zug);
+
+        if (y == 6 || y == 1) {
+            if (Spiel.imBrett(x, y + richtung) && Spiel.imBrett(x, y +2*richtung)) {
+                if (board[y + richtung][x] instanceof Empty
+                        && board[y + 2 * richtung][x] instanceof Empty) {
+                    moegliche.add(new Zug(x, y, x, y + 2 * richtung));
                 }
             }
-        } else {
-            for (Zug zug : zuege) {
-                if (Spiel.isValid(zug, this.isWhite(), board)) {
-                    moegliche.add(zug);
+        }
+
+        for (int dx : new int[]{-1, 1}) {
+            int zielX = x + dx;
+            int zielY = y + richtung;
+            if (Spiel.imBrett(zielX, zielY)) {
+                if (!(board[zielY][zielX] instanceof Empty)) {
+                    if (board[zielY][zielX].isWhite() != this.isWhite()) {
+                        if (zielY == endreihe) {
+                            addPromotions(moegliche, x, y, zielX, zielY);
+                        } else {
+                            moegliche.add(new Zug(x, y, zielX, zielY));
+                        }
+                    }
+                } else if (board[y][zielX] instanceof Bauer gegnerBauer
+                        && gegnerBauer.isWhite() != this.isWhite()
+                        && gegnerBauer.isEnPassantPossible()) {
+                    moegliche.add(new Zug(x, y, zielX, zielY));
                 }
             }
         }
         return moegliche;
+    }
+    private void addPromotions(List<Zug> moegliche, int startX, int startY, int zielX, int zielY) {
+        char[] figuren = {'q', 'r', 'b', 'n'};
+        for (char f : figuren) {
+            moegliche.add(new Zug(startX, startY, zielX, zielY, f));
+        }
     }
 }

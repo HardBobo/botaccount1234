@@ -1,20 +1,18 @@
 public class Test {
     static Piece [][] temp;
+    private static long startTime = 0; // Startzeit für Messung
     public static void main(String [] args){
         temp = new Piece[8][8];
+        Board.setupBoard(temp);
         test1();
     }
     public static void test1(){
-        for(int i = 0; i < 8; i++){
-            for(int j = 0; j < 8; j++){
-                temp[i][j] = new Empty();
-            }
+        startTime = System.currentTimeMillis();
+        for(int i = 0; i < 100000; i++){
+            System.out.println(MoveFinder.possibleMoves(true, temp).getFirst().processZug());
         }
-        temp[2][5] = new Dame(true);
-        temp[2][4] = new Laeufer(true);
-        temp[0][0] = new Koenig(true);
-        temp[1][5] = new Bauer(true);
-        temp[1][7] = new Koenig(false);
+        long elapsed = System.currentTimeMillis() - startTime;
+        System.out.println("Time elapsed: " + elapsed + " ms");
     }
 
 }

@@ -1,6 +1,5 @@
 import java.util.*;
 public class Spiel {
-    public static final Board BOARD = new Board();
     public static boolean weissAmZug;
     public static int spielstatus;
     public static int running;
@@ -15,53 +14,44 @@ public class Spiel {
         running = 0;
         spielstatus = 0;
         weissAmZug = true;
-        BOARD.setupBoard();
+        Board.setupBoard(Board.brett);
     }
 
     public void playMove(Zug zug){
-        if(spielstatus == running){
             //System.out.println((weissAmZug ? "Weiß" : "Schwarz") + " ist am Zug.");
-            boolean bauerDoppelZug;
-            if(isValid(zug, weissAmZug, Board.brett)) {
-                //bauerdoppel wird gespeichert für en passant danach
-                bauerDoppelZug = bauerDoppel(zug, Board.brett);
-                //rochade
-                if(rochade(zug, Board.brett)){
-                    if (kurze(zug)) { // kurze
-                        kurzeRochade(zug);
-                    } else { // lange
-                        langeRochade(zug);
-                    }
-                }
-                // en passant
-                if (enPassant(zug, Board.brett)) {
-                    enPassantExe(zug);
-                }
-                //normal
-                normalTurnExe(zug);
-                //promotion
-                if(promotion(zug, Board.brett)){
-                    boolean isWhite = Board.brett[zug.endY][zug.endX].isWhite();
-                    promotionExe(zug, isWhite);
-                }
-                resetPawnEnPassant(Board.brett);
-                if (bauerDoppelZug) {
-                    bauerEnPassantPossible(zug);
-                }
-                if(Board.brett[zug.endY][zug.endX] instanceof Turm turm){
-                    turm.setKannRochieren(false);
-                }
-                if(Board.brett[zug.endY][zug.endX] instanceof Koenig koenig){
-                    koenig.setKannRochieren(false);
-                }
-                gameOverCheck();
-                nextTurn();
+    boolean bauerDoppelZug;
+        //bauerdoppel wird gespeichert für en passant danach
+        bauerDoppelZug = bauerDoppel(zug, Board.brett);
+        //rochade
+        if(rochade(zug, Board.brett)){
+            if (kurze(zug)) { // kurze
+                kurzeRochade(zug);
+            } else { // lange
+                langeRochade(zug);
             }
-            else
-                System.out.println("ungültiger Zug: " + zug.processZug());
-        } else {
-            resultOutput();
         }
+        // en passant
+        if (enPassant(zug, Board.brett)) {
+            enPassantExe(zug);
+        }
+        //normal
+        normalTurnExe(zug);
+        //promotion
+        if(promotion(zug, Board.brett)){
+            boolean isWhite = Board.brett[zug.endY][zug.endX].isWhite();
+            promotionExe(zug, isWhite);
+        }
+        resetPawnEnPassant(Board.brett);
+        if (bauerDoppelZug) {
+            bauerEnPassantPossible(zug);
+        }
+        if(Board.brett[zug.endY][zug.endX] instanceof Turm turm){
+            turm.setKannRochieren(false);
+        }
+        if(Board.brett[zug.endY][zug.endX] instanceof Koenig koenig){
+            koenig.setKannRochieren(false);
+        }
+        nextTurn();
     }
 
     public static void nextTurn() {
@@ -124,100 +114,11 @@ public class Spiel {
         if(spielstatus == draw)
             System.out.println("Unentschieden");
     }
-
-    public static void gameOverCheck(){
-        if(!hasPossibleMove(!weissAmZug, Board.brett)){
-            if(allSeenSquares(weissAmZug, Board.brett).contains(kingCoordinates(!weissAmZug, Board.brett))){
-                spielstatus = weissAmZug ? whitewin : blackwin;
-            }
-            else
-                spielstatus = draw;
-        }
-    }
-    public static boolean hasPossibleMove(boolean white, Piece[][] board) {
-        for (int y = 0; y < 8; y++) {
-            for (int x = 0; x < 8; x++) {
-                Piece piece = board[y][x];
-                if (piece.isWhite() == white) {
-                    for (int zielY = 0; zielY < 8; zielY++) {
-                        for (int zielX = 0; zielX < 8; zielX++) {
-                            Zug zug = new Zug(x, y, zielX, zielY);
-                            if (isValid(zug, white, board)) {
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return false;
-    }
-    public static boolean isValid(Zug zug, boolean white, Piece[][] board){
-        //ausserhalb
-        if (zug.startX < 0 || zug.startX > 7 || zug.startY < 0 || zug.startY > 7 ||
-                zug.endX < 0 || zug.endX > 7 || zug.endY < 0 || zug.endY > 7) {
-            //System.out.println("ausserhalb");
-            return false;
-        }
-        //leere figur
-        Piece startFigur = board[zug.startY][zug.startX];
-        if (startFigur instanceof Empty) {
-            //System.out.println("keine Figur hier");
-            return false;
-        }
-        //gegnerische figur
-        if (startFigur.isWhite() != white) {
-            //System.out.println("gegnerische figur");
-            return false;
-        }
+    public static boolean isPseudoLegal(Zug zug, boolean white, Piece[][] board){
         //eigene figur schlagen
         Piece zielFigur = board[zug.endY][zug.endX];
-        if (!(zielFigur instanceof Empty) && zielFigur.isWhite() == white) {
-            //System.out.println("du kannst keine eigene figur schlagen");
-            return false;
-        }
-
-        Piece figur = board[zug.startY][zug.startX];
-
-        //bauernzüge
-        if (figur instanceof Bauer) {
-            if (!((Bauer) figur).istZugMoeglich(zug.startX, zug.startY, zug.endX, zug.endY, zug.promoteTo, board)) {
-                return false;
-            }
-        }
-        //springerzüge
-        if (figur instanceof Springer) {
-            if (!((Springer) figur).istZugMoeglich(zug.startX, zug.startY, zug.endX, zug.endY, board)) {
-                return false;
-            }
-        }
-        //turmzüge
-        if(figur instanceof Turm) {
-            if(!((Turm) figur).istZugMoeglich(zug.startX, zug.startY, zug.endX, zug.endY, board)){
-                return false;
-            }
-        }
-        //läuferzüge
-        if(figur instanceof Laeufer) {
-            if(!((Laeufer) figur).istZugMoeglich(zug.startX, zug.startY, zug.endX, zug.endY, board)){
-                return false;
-            }
-        }
-        //damenzüge
-        if(figur instanceof Dame) {
-            if(!((Dame) figur).istZugMoeglich(zug.startX, zug.startY, zug.endX, zug.endY, board)){
-                return false;
-            }
-        }
-        //königszüge
-        if(figur instanceof Koenig) {
-            if(!((Koenig) figur).istZugMoeglich(zug.startX, zug.startY, zug.endX, zug.endY, board)){
-                return false;
-            }
-        }
-        //schach
-
-        return !inCheckAfterMove(zug, board, startFigur.isWhite());
+        //System.out.println("du kannst keine eigene figur schlagen");
+        return zielFigur instanceof Empty || zielFigur.isWhite() != white;
     }
     public static Koordinaten kingCoordinates(boolean white, Piece[][] board){
         for(int i = 0; i < 8; i++){
@@ -236,7 +137,7 @@ public class Spiel {
             for (int x = 0; x < 8; x++) {
                 Piece figur = board[y][x];
 
-                if (!figur.getType().equals("empty") && figur.isWhite() == enemyIsWhite) {
+                if (!(figur instanceof Empty) && figur.isWhite() == enemyIsWhite) {
                     bedroht.addAll(figur.bedrohteFelder(x, y, board));
                 }
             }
@@ -257,16 +158,88 @@ public class Spiel {
     }
     public static boolean inCheckAfterMove(Zug zug, Piece [][] board, boolean isWhite){
         boolean inCheck = false;
-        MoveInfo info = moveFinder.saveMoveInfo(zug, board);
-        moveFinder.doMove(zug, board);
-        if(allSeenSquares(!isWhite, board).contains(kingCoordinates(isWhite, board))){
+        MoveInfo info = MoveFinder.saveMoveInfo(zug, board);
+        MoveFinder.doMove(zug, board);
+        Koordinaten coords = kingCoordinates(isWhite, board);
+        if(isSquareAttacked(board, coords.x, coords.y, !isWhite)){
             inCheck = true;
         }
-        moveFinder.undoMove(zug, board, info);
+        MoveFinder.undoMove(zug, board, info);
         return inCheck;
     }
+    public static boolean isSquareAttacked(Piece[][] board, int x, int y, boolean enemyIsWhite) {
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
+                Piece piece = board[row][col];
+
+                // richtige farbe + keine leeren felder
+                if (piece instanceof Empty || piece.isWhite() != enemyIsWhite) {
+                    continue;
+                }
+
+                // kann figur nach x y ziehen
+                final boolean diagonal = Math.abs(col - x) == Math.abs(row - y);
+                switch (piece) {
+                    case Bauer bauer -> {
+                        int dir = enemyIsWhite ? -1 : 1;
+                        if (row + dir == y && (col + 1 == x || col - 1 == x)) {
+                            return true;
+                        }
+                    }
+                    case Springer springer -> {
+                        int dx = Math.abs(col - x);
+                        int dy = Math.abs(row - y);
+                        if (dx * dy == 2) {
+                            return true;
+                        }
+                    }
+                    case Laeufer laeufer -> {
+                        if (diagonal && pathClear(board, col, row, x, y)) {
+                            return true;
+                        }
+                    }
+                    case Turm turm -> {
+                        if ((col == x || row == y) && pathClear(board, col, row, x, y)) {
+                            return true;
+                        }
+                    }
+                    case Dame dame -> {
+                        if ((diagonal ||
+                                (col == x || row == y)) &&
+                                pathClear(board, col, row, x, y)) {
+                            return true;
+                        }
+                    }
+                    case Koenig koenig -> {
+                        if (Math.abs(col - x) <= 1 && Math.abs(row - y) <= 1) {
+                            return true;
+                        }
+                    }
+                    default -> { /* Empty wird schon oben gefiltert */ }
+                }
+            }
+        }
+        return false;
+    }
+    private static boolean pathClear(Piece[][] board, int startX, int startY, int endX, int endY) {
+        int dx = Integer.compare(endX, startX);
+        int dy = Integer.compare(endY, startY);
+
+        int x = startX + dx;
+        int y = startY + dy;
+
+        while (x != endX || y != endY) {
+            if (!(board[y][x] instanceof Empty)) {
+                return false;
+            }
+            x += dx;
+            y += dy;
+        }
+        return true;
+    }
     public static boolean inCheck(Piece [][] board, boolean isWhite){
-        return allSeenSquares(!isWhite, board).contains(kingCoordinates(isWhite, board));
+        Koordinaten coords = kingCoordinates(isWhite, board);
+        return isSquareAttacked(board, coords.x, coords.y, !isWhite);
     }
     public static boolean isCapture(Zug zug, Piece [][] board){
         Piece captured = enPassant(zug, board) ? board[zug.startY][zug.endX] : board[zug.endY][zug.endX];

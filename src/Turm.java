@@ -13,31 +13,6 @@ public class Turm extends Piece {
     public void setKannRochieren(boolean b) {
         this.kannRochieren = b;
     }
-    public boolean istZugMoeglich(int startX, int startY, int zielX, int zielY, Piece[][] board) {
-        // nur eine richtung
-        if (startX != zielX && startY != zielY) {
-            //System.out.println("Turmzug unmöglich");
-            return false;
-        }
-
-        int dx = Integer.compare(zielX, startX); // Richtung in X (0, 1 oder -1)
-        int dy = Integer.compare(zielY, startY); // Richtung in Y (0, 1 oder -1)
-
-        int x = startX + dx;
-        int y = startY + dy;
-
-        //
-        while (x != zielX || y != zielY) {
-            if (!(board[y][x] instanceof Empty)) {
-                //System.out.println("Turmzug unmöglich");
-                return false; //was im weg
-            }
-            x += dx;
-            y += dy;
-        }
-        return true;
-    }
-
     @Override
     public List<Koordinaten> bedrohteFelder(int x, int y, Piece[][] board) {
         List<Koordinaten> bedrohte = new ArrayList<>();
@@ -92,7 +67,7 @@ public class Turm extends Piece {
 
                 zug = new Zug(x, y, cx, cy);
 
-                if(Spiel.isValid(zug, this.isWhite(), board))
+                if(Spiel.isPseudoLegal(zug, this.isWhite(), board))
                     moegliche.add(zug);
 
                 if (!(board[cy][cx] instanceof Empty)) {
@@ -104,7 +79,6 @@ public class Turm extends Piece {
                 cy += dy;
             }
         }
-
         return moegliche;
     }
 }

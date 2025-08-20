@@ -135,7 +135,7 @@ public class LichessBotStream {
                                                     playMove(gameId, Objects.requireNonNull(OpeningDictionary.getNextOpeningMove(moves)).processZug());
                                                 else {
                                                     temp = Board.copy(Board.brett);
-                                                    playMove(gameId, moveFinder.iterativeDeepening(temp,true).processZug());
+                                                    playMove(gameId, MoveFinder.iterativeDeepening(temp,true).processZug());
                                                 }
                                             }
                                         } else {
@@ -145,7 +145,7 @@ public class LichessBotStream {
                                                     playMove(gameId, Objects.requireNonNull(OpeningDictionary.getNextOpeningMove(moves)).processZug());
                                                 else {
                                                     temp = Board.copy(Board.brett);
-                                                    playMove(gameId, moveFinder.iterativeDeepening(temp, false).processZug());
+                                                    playMove(gameId, MoveFinder.iterativeDeepening(temp, false).processZug());
                                                 }
                                             }
                                         }

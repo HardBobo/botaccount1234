@@ -48,7 +48,7 @@ public class Laeufer extends Piece {
             while (Spiel.imBrett(cx, cy)) {
                 bedrohte.add(new Koordinaten(cx, cy));
 
-                if (!board[cy][cx].getType().equals("empty")) {
+                if (!(board[cy][cx] instanceof Empty)) {
                     //wenn figur im weg
                     break;
                 }
@@ -84,7 +84,7 @@ public class Laeufer extends Piece {
 
                 zug = new Zug(x, y, cx, cy);
 
-                if(Spiel.isValid(zug, this.isWhite(), board))
+                if(Spiel.isPseudoLegal(zug, this.isWhite(), board))
                     moegliche.add(zug);
 
                 if (!(board[cy][cx] instanceof Empty)) {
@@ -96,7 +96,6 @@ public class Laeufer extends Piece {
                 cy += dy;
             }
         }
-
         return moegliche;
     }
 }
