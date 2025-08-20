@@ -199,7 +199,7 @@ public class MoveFinder {
             if(kurze(zug) && kurzePossible(zug, board)) { // kurze Rochade
                 kurzeRochade(zug, board);
                 moveExecuted = true;
-            } else if(langePossible(zug, board)){ // lange Rochade
+            } else if(!kurze(zug) && langePossible(zug, board)){ // lange Rochade
                 langeRochade(zug, board);
                 moveExecuted = true;
             } else {
