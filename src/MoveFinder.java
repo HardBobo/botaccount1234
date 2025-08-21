@@ -105,7 +105,7 @@ public class MoveFinder {
 
         if (possibleMoves.isEmpty()) {
             if (Spiel.inCheck(board, isWhite)) {
-                return isWhite ? Integer.MIN_VALUE : Integer.MAX_VALUE;
+                return isWhite ? Integer.MAX_VALUE : Integer.MIN_VALUE;
             } else {
                 return 0;
             }
@@ -156,8 +156,9 @@ public class MoveFinder {
 
         if (moves.isEmpty()) {
             if (Spiel.inCheck(board, isWhite)) {
-                return isWhite ? Integer.MIN_VALUE : Integer.MAX_VALUE;
+                return isWhite ? Integer.MAX_VALUE: Integer.MIN_VALUE;
             } else {
+                System.out.println(0);
                 return 0;
             }
         }
