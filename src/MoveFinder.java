@@ -62,7 +62,11 @@ public class MoveFinder {
         for(Zug zug : orderedMoves){// do move und undo move damit nicht dauerhaft neue teure kopien des boards erstellt werden
 
             MoveInfo info = saveMoveInfo(zug, board);
+
             boolean success = doMove(zug, board);
+
+            if(!success)
+                continue;
 
             if(Spiel.inCheck(board, isWhite) && success){
                 undoMove(zug, board, info);
@@ -71,9 +75,7 @@ public class MoveFinder {
 
             int score = negamax(board, depth, Integer.MIN_VALUE, Integer.MAX_VALUE, !isWhite);
 
-            if (success) {
-                undoMove(zug, board, info);
-            }
+            undoMove(zug, board, info);
 
             if(isWhite){
                 bestMoves.put(score, zug);
@@ -111,8 +113,13 @@ public class MoveFinder {
 
         int value = Integer.MIN_VALUE;
         for (Zug zug : possibleMoves){
+
             MoveInfo info = saveMoveInfo(zug, board);
+
             boolean success = doMove(zug, board);
+
+            if(!success)
+                continue;
 
             if(Spiel.inCheck(board, isWhite) && success){
                 undoMove(zug, board, info);
@@ -121,9 +128,8 @@ public class MoveFinder {
 
             value = Math.max(value, -negamax(board, depth - 1, -beta, -alpha, !isWhite ));
 
-            if (success) {
-                undoMove(zug, board, info);
-            }
+
+            undoMove(zug, board, info);
 
             alpha = Math.max(alpha, value);
 
@@ -147,6 +153,15 @@ public class MoveFinder {
             alpha = best_value;
 
         ArrayList<Zug> moves = possibleMoves(isWhite, board);
+
+        if (moves.isEmpty()) {
+            if (Spiel.inCheck(board, isWhite)) {
+                return isWhite ? Integer.MIN_VALUE : Integer.MAX_VALUE;
+            } else {
+                return 0;
+            }
+        }
+
         ArrayList<Zug> forcingMoves = new ArrayList<>();
 
         for(Zug zug : moves){
@@ -154,10 +169,15 @@ public class MoveFinder {
                 forcingMoves.add(zug);
         }
 
+        MoveOrdering.orderMoves(forcingMoves, board, isWhite);
+
         for(Zug zug : forcingMoves)  {
 
             MoveInfo info = saveMoveInfo(zug, board);
             boolean success = doMove(zug, board);
+
+            if(!success)
+                continue;
 
             if(Spiel.inCheck(board, isWhite) && success){
                 undoMove(zug, board, info);
@@ -166,9 +186,8 @@ public class MoveFinder {
 
             int score = -qSearch(board, -beta, -alpha, !isWhite);
 
-            if (success) {
-                undoMove(zug, board, info);
-            }
+            undoMove(zug, board, info);
+
 
             if( score >= beta ) {
                 return score;
@@ -188,7 +207,7 @@ public class MoveFinder {
             if(kurze(zug) && kurzePossible(zug, board)) { // kurze Rochade
                 kurzeRochade(zug, board);
                 moveExecuted = true;
-            } else if(langePossible(zug, board)){ // lange Rochade
+            } else if(!kurze(zug) && langePossible(zug, board)){ // lange Rochade
                 langeRochade(zug, board);
                 moveExecuted = true;
             } else {
@@ -231,6 +250,15 @@ public class MoveFinder {
         Piece movingPiece = board[zug.startY][zug.startX];
         Piece targetPiece;
         Koordinaten targetCoords;
+
+        if(movingPiece instanceof Koenig){
+            info.wasFirstMove = ((Koenig) movingPiece).kannRochieren();
+        }
+
+        if(movingPiece instanceof Turm){
+            info.wasFirstMove = ((Turm) movingPiece).kannRochieren();
+        }
+
         if(enPassant(zug, board)) {
             targetPiece = board[zug.startY][zug.endX];
             targetCoords = new Koordinaten(zug.endX, zug.startY);
@@ -250,11 +278,12 @@ public class MoveFinder {
 
         // rochade Infos
         if (rochade(zug, board)) {
-            info.rookMoved = true;
-            if (kurze(zug)) {
+            if (kurze(zug) && kurzePossible(zug, board)) {
+                info.rookMoved = true;
                 info.rookStartX = 7;
                 info.rookEndX = 5;
-            } else {
+            } else if (!kurze(zug) && langePossible(zug, board)) {
+                info.rookMoved = true;
                 info.rookStartX = 0;
                 info.rookEndX = 3;
             }
@@ -265,12 +294,14 @@ public class MoveFinder {
         return info;
     }
     public static void undoMove(Zug zug, Piece[][] board, MoveInfo info) {
+
         resetMovingPiece(zug, board, info);
 
         // geschlagene
         if(wasEnPassant(zug, board, info.capturedPiece, info.targetCoords)){
             board[zug.endY][zug.endX] = new Empty();
         }
+
         resetSquareMovedOnto(board, info);
 
         // turm bei rochade zurück
@@ -379,6 +410,14 @@ public class MoveFinder {
     }
     public static void resetMovingPiece(Zug zug, Piece [][] board, MoveInfo info){
         board[zug.startY][zug.startX] = info.movingPiece;
+
+        if(info.movingPiece instanceof Koenig k){
+            k.setKannRochieren(info.wasFirstMove);
+        }
+
+        if(info.movingPiece instanceof Turm t){
+            t.setKannRochieren(info.wasFirstMove);
+        }
     }
     public static void resetSquareMovedOnto(Piece [][] board, MoveInfo info){
         board[info.targetCoords.y][info.targetCoords.x] = info.capturedPiece;
