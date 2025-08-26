@@ -55,6 +55,8 @@ public class MoveFinder {
 
         TreeMap<Integer, Zug> bestMoves = new TreeMap<>();
 
+        orderedMoves.removeIf(zug -> !isLegalMove(zug, board, isWhite));
+
         if(orderedMoves.isEmpty()) return null;
 
         Zug bestMove = orderedMoves.getFirst();
@@ -67,11 +69,6 @@ public class MoveFinder {
 
             if(!success)
                 continue;
-
-            if(Spiel.inCheck(board, isWhite) && success){
-                undoMove(zug, board, info);
-                continue;
-            }
 
             int score = negamax(board, depth, Integer.MIN_VALUE, Integer.MAX_VALUE, !isWhite);
 
@@ -98,21 +95,24 @@ public class MoveFinder {
         nodes++;
 
         if (depth == 0)
-            return qSearch(board, alpha, beta, isWhite);
+            return evaluation(board, isWhite);
 
-        ArrayList<Zug> possibleMoves = possibleMoves(isWhite, board);
-        MoveOrdering.orderMoves(possibleMoves, board, isWhite);
+        ArrayList<Zug> pseudoLegalMoves = possibleMoves(isWhite, board);
 
-        if (possibleMoves.isEmpty()) {
+        pseudoLegalMoves.removeIf(zug -> !isLegalMove(zug, board, isWhite));
+
+        if (pseudoLegalMoves.isEmpty()) {
             if (Spiel.inCheck(board, isWhite)) {
-                return 100000 + depth;
+                return -(100000 + depth);
             } else {
                 return 0;
             }
         }
 
+        MoveOrdering.orderMoves(pseudoLegalMoves, board, isWhite);
+
         int value = Integer.MIN_VALUE;
-        for (Zug zug : possibleMoves){
+        for (Zug zug : pseudoLegalMoves){
 
             MoveInfo info = saveMoveInfo(zug, board);
 
@@ -120,11 +120,6 @@ public class MoveFinder {
 
             if(!success)
                 continue;
-
-            if(Spiel.inCheck(board, isWhite) && success){
-                undoMove(zug, board, info);
-                continue;
-            }
 
             value = Math.max(value, -negamax(board, depth - 1, -beta, -alpha, !isWhite ));
 
@@ -141,6 +136,18 @@ public class MoveFinder {
 
     private static int qSearch(Piece [][] board, int alpha, int beta, boolean isWhite){
 
+        ArrayList<Zug> moves = possibleMoves(isWhite, board);
+
+        moves.removeIf(zug -> !isLegalMove(zug, board, isWhite));
+
+        if (moves.isEmpty()) {
+            if (Spiel.inCheck(board, isWhite)) {
+                return -100000;
+            } else {
+                return 0;
+            }
+        }
+
         int static_eval = evaluation(board, isWhite);
 
         int best_value = static_eval;
@@ -152,15 +159,6 @@ public class MoveFinder {
         if( best_value > alpha )
             alpha = best_value;
 
-        ArrayList<Zug> moves = possibleMoves(isWhite, board);
-
-        if (moves.isEmpty()) {
-            if (Spiel.inCheck(board, isWhite)) {
-                return 100000;
-            } else {
-                return 0;
-            }
-        }
 
         ArrayList<Zug> forcingMoves = new ArrayList<>();
 
@@ -178,11 +176,6 @@ public class MoveFinder {
 
             if(!success)
                 continue;
-
-            if(Spiel.inCheck(board, isWhite) && success){
-                undoMove(zug, board, info);
-                continue;
-            }
 
             int score = -qSearch(board, -beta, -alpha, !isWhite);
 
@@ -314,7 +307,7 @@ public class MoveFinder {
     public static Zug iterativeDeepening (Piece[][] board, boolean isWhite){
         ArrayList<Zug> order = possibleMoves(isWhite, board);
 
-        for(int i = 1; i<5; i++) {
+        for(int i = 1; i<6; i++) {
             System.out.println("Tiefe: " + i);
 
             order = (findBestMoves(board, i, isWhite,order));
@@ -444,5 +437,20 @@ public class MoveFinder {
             }
         }
         return null;
+    }
+    static boolean isLegalMove(Zug zug, Piece[][] board, boolean isWhite) {
+        MoveInfo info = saveMoveInfo(zug, board);
+        boolean success = doMove(zug, board);
+
+        if (!success) {
+            undoMove(zug, board, info);
+            return false;
+        }
+
+        boolean kingInCheck = Spiel.inCheck(board, isWhite);
+
+        undoMove(zug, board, info);
+
+        return !kingInCheck;
     }
 }

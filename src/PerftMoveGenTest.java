@@ -8,7 +8,7 @@ public class PerftMoveGenTest {
         static Piece [][] temp;
     public static void main(String[] args) throws NoSuchAlgorithmException {
         temp = new Piece[8][8];
-        temp = Board.fenToBoard("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1");
+        temp = Board.fenToBoard("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - ");
 //        MoveFinder.doMove(new Zug("d5e6"), temp);
 //        MoveFinder.doMove(new Zug("e8g8"), temp);
 //        MoveFinder.doMove(new Zug("e6d7"), temp);
@@ -17,6 +17,9 @@ public class PerftMoveGenTest {
 
     public static void perftDivide(Piece [][] board, int depth, boolean isWhite) throws NoSuchAlgorithmException {
         ArrayList<Zug> moves = MoveFinder.possibleMoves(isWhite, board);
+
+        moves.removeIf(zug -> !MoveFinder.isLegalMove(zug, board, isWhite));
+
         MoveOrdering.orderMoves(moves, board, isWhite);
 
         int total = 0;
@@ -38,11 +41,6 @@ public class PerftMoveGenTest {
             if(!success)
                 continue;
 
-            if(Spiel.inCheck(board, isWhite)){
-                MoveFinder.undoMove(zug, board, info);
-                continue;
-            }
-
             int nodes = perft(board, depth - 1, !isWhite);
             System.out.println(zug.processZug() + ": " + nodes);
 
@@ -56,7 +54,9 @@ public class PerftMoveGenTest {
         if (depth == 0) return 1;
 
         ArrayList<Zug> moves = MoveFinder.possibleMoves(isWhite, board);
-        // IMPORTANT: Ensure these are *legal* moves, not just pseudo-legal
+
+        moves.removeIf(zug -> !MoveFinder.isLegalMove(zug, board, isWhite));
+
         MoveOrdering.orderMoves(moves, board, isWhite);
 
         int count = 0;
@@ -66,11 +66,6 @@ public class PerftMoveGenTest {
 
             if(!success)
                 continue;
-
-            if(Spiel.inCheck(board, isWhite)){
-                MoveFinder.undoMove(zug, board, info);
-                continue;
-            }
 
             count += perft(board, depth - 1, !isWhite);
             MoveFinder.undoMove(zug, board, info);

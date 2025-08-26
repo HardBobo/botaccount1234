@@ -1,16 +1,22 @@
+import java.util.ArrayList;
+
 public class Test {
     static Piece [][] temp;
-    private static long startTime = 0; // Startzeit für Messung
+
     public static void main(String [] args){
         temp = new Piece[8][8];
-        Board.setupBoard(temp);
+        temp = Board.fenToBoard("r2k4/1p2R3/p2p2b1/2B4p/1P5P/1KP4B/Pn6/5R2 b - - 0 41");
         test1();
     }
     public static void test1(){
-        startTime = System.currentTimeMillis();
-        for(int i = 0; i < 100000; i++){
-            System.out.println(MoveFinder.possibleMoves(true, temp).getFirst().processZug());
-        }
+        // Startzeit für Messung
+        long startTime = System.currentTimeMillis();
+
+        ArrayList<Zug> pM = MoveFinder.possibleMoves(false, temp);
+        MoveOrdering.orderMoves(pM, temp, false);
+
+        System.out.println(MoveFinder.findBestMoves(temp, 3, false, pM).getFirst().processZug());
+
         long elapsed = System.currentTimeMillis() - startTime;
         System.out.println("Time elapsed: " + elapsed + " ms");
     }
