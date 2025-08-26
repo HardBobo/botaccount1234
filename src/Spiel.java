@@ -106,14 +106,6 @@ public class Spiel {
             case 'n' -> Board.brett[zug.endY][zug.endX] = new Springer(isWhite);
         }
     }
-    public static void resultOutput(){
-        if(spielstatus == whitewin)
-            System.out.println("Weiß gewinnt");
-        if(spielstatus == blackwin)
-            System.out.println("Schwarz gewinnt");
-        if(spielstatus == draw)
-            System.out.println("Unentschieden");
-    }
     public static boolean isPseudoLegal(Zug zug, boolean white, Piece[][] board){
         //eigene figur schlagen
         Piece zielFigur = board[zug.endY][zug.endX];
@@ -155,17 +147,6 @@ public class Spiel {
                 }
             }
         }
-    }
-    public static boolean inCheckAfterMove(Zug zug, Piece [][] board, boolean isWhite){
-        boolean inCheck = false;
-        MoveInfo info = MoveFinder.saveMoveInfo(zug, board);
-        MoveFinder.doMove(zug, board);
-        Koordinaten coords = kingCoordinates(isWhite, board);
-        if(isSquareAttacked(board, coords.x, coords.y, !isWhite)){
-            inCheck = true;
-        }
-        MoveFinder.undoMove(zug, board, info);
-        return inCheck;
     }
     public static boolean isSquareAttacked(Piece[][] board, int x, int y, boolean enemyIsWhite) {
         for (int row = 0; row < 8; row++) {

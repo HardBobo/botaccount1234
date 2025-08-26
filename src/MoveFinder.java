@@ -84,12 +84,11 @@ public class MoveFinder {
             }
         }
 
-//        long elapsed = System.currentTimeMillis() - startTime;
-//        double nps = (nodes * 1000.0) / (elapsed + 1);
-//        System.out.println("Nodes: " + nodes);
-//        System.out.println("Time elapsed: " + elapsed + " ms");
-//        System.out.println("Speed: " + (long)nps + " nodes/s");
-        System.out.println("Beste Evaluation: " + bestMoves.firstKey());
+        long elapsed = System.currentTimeMillis() - startTime;
+        double nps = (nodes * 1000.0) / (elapsed + 1);
+        System.out.println("Nodes: " + nodes);
+        System.out.println("Time elapsed: " + elapsed + " ms");
+        System.out.println("Speed: " + (long)nps + " nodes/s");
 
         ArrayList<Zug> temp = new ArrayList<>(bestMoves.values());
         return temp;
@@ -106,12 +105,9 @@ public class MoveFinder {
 
         if (possibleMoves.isEmpty()) {
             if (Spiel.inCheck(board, isWhite)) {
-                return isWhite ? Integer.MAX_VALUE : Integer.MIN_VALUE;
+                return 100000 + depth;
             } else {
-                if(evaluation(board, isWhite) < 0)
-                    return Integer.MIN_VALUE;
-                else
-                    return Integer.MAX_VALUE;
+                return 0;
             }
         }
 
@@ -160,12 +156,9 @@ public class MoveFinder {
 
         if (moves.isEmpty()) {
             if (Spiel.inCheck(board, isWhite)) {
-                return isWhite ? Integer.MAX_VALUE : Integer.MIN_VALUE;
+                return 100000;
             } else {
-                if(best_value < 0)
-                    return Integer.MIN_VALUE;
-                else
-                    return Integer.MAX_VALUE;
+                return 0;
             }
         }
 
@@ -255,8 +248,13 @@ public class MoveFinder {
     public static MoveInfo saveMoveInfo(Zug zug, Piece[][] board) {
         MoveInfo info = new MoveInfo();
         Piece movingPiece = board[zug.startY][zug.startX];
-        Piece targetPiece;
-        Koordinaten targetCoords;
+        Piece targetPiece = board[zug.endY][zug.endX];
+
+        info.enPassantBauerCoords = bauerHasEnPassantFlag(board);
+
+        if(movingPiece instanceof Bauer){
+            info.wasEnPassantCapturable = ((Bauer) movingPiece).isEnPassantPossible();
+        }
 
         if(movingPiece instanceof Koenig){
             info.wasFirstMove = ((Koenig) movingPiece).kannRochieren();
@@ -266,22 +264,11 @@ public class MoveFinder {
             info.wasFirstMove = ((Turm) movingPiece).kannRochieren();
         }
 
-        if(enPassant(zug, board)) {
-            targetPiece = board[zug.startY][zug.endX];
-            targetCoords = new Koordinaten(zug.endX, zug.startY);
-
-        }
-        else {
-            targetPiece = board[zug.endY][zug.endX];
-            targetCoords = new Koordinaten(zug.endX, zug.endY);
-        }
-
-        info.targetCoords = targetCoords;
         // sich bewegende figur speichern
         info.movingPiece = movingPiece;
 
         // geschlagene Figur speichern
-        info.capturedPiece = targetPiece;
+        info.squareMovedOnto = targetPiece;
 
         // rochade Infos
         if (rochade(zug, board)) {
@@ -305,11 +292,15 @@ public class MoveFinder {
         resetMovingPiece(zug, board, info);
 
         // geschlagene
-        if(wasEnPassant(zug, board, info.capturedPiece, info.targetCoords)){
-            board[zug.endY][zug.endX] = new Empty();
+        if(wasEnPassant(zug, board, info.squareMovedOnto)){
+            enPassantResetExe(board, zug);
+        } else {
+            resetSquareMovedOnto(board, zug, info);
         }
 
-        resetSquareMovedOnto(board, info);
+        if(info.enPassantBauerCoords != null){
+            ((Bauer) board[info.enPassantBauerCoords.y][info.enPassantBauerCoords.x]).setEnPassantPossible(true);
+        }
 
         // turm bei rochade zurück
         if (info.rookMoved) {
@@ -323,7 +314,7 @@ public class MoveFinder {
     public static Zug iterativeDeepening (Piece[][] board, boolean isWhite){
         ArrayList<Zug> order = possibleMoves(isWhite, board);
 
-        for(int i = 1; i<4; i++) {
+        for(int i = 1; i<5; i++) {
             System.out.println("Tiefe: " + i);
 
             order = (findBestMoves(board, i, isWhite,order));
@@ -332,9 +323,8 @@ public class MoveFinder {
 
         return order.getFirst();
     }
-    private static boolean wasEnPassant(Zug zug, Piece[][] board, Piece capturedPiece, Koordinaten targetCoords){
-        if(board[zug.startY][zug.startX] instanceof Bauer && capturedPiece.isWhite() != board[zug.startY][zug.startX].isWhite()
-                && capturedPiece instanceof Bauer b && b.isEnPassantPossible() && zug.startY == targetCoords.y){
+    private static boolean wasEnPassant(Zug zug, Piece[][] board, Piece squareMovedOnto){
+        if(board[zug.startY][zug.startX] instanceof Bauer && squareMovedOnto instanceof Empty && Math.abs(zug.endX - zug.startX) == 1){
             return true;
         }
         return false;
@@ -425,11 +415,34 @@ public class MoveFinder {
         if(info.movingPiece instanceof Turm t){
             t.setKannRochieren(info.wasFirstMove);
         }
+
+        if(info.movingPiece instanceof Bauer b){
+            b.setEnPassantPossible(info.wasEnPassantCapturable);
+        }
     }
-    public static void resetSquareMovedOnto(Piece [][] board, MoveInfo info){
-        board[info.targetCoords.y][info.targetCoords.x] = info.capturedPiece;
+    public static void resetSquareMovedOnto(Piece [][] board,Zug zug, MoveInfo info){
+        board[zug.endY][zug.endX] = info.squareMovedOnto;
     }
     public static boolean bauerDoppel(Zug zug, Piece [][] board){
         return Math.abs(zug.endY - zug.startY) == 2 && board[zug.startY][zug.startX] instanceof Bauer;
+    }
+    private static void enPassantResetExe(Piece [][] board, Zug zug){
+        board[zug.endY][zug.endX] = new Empty();
+        board[zug.startY][zug.endX] = new Bauer(!board[zug.startY][zug.startX].isWhite());
+        ((Bauer) board[zug.startY][zug.endX]).setEnPassantPossible(true);
+    }
+    private static Koordinaten bauerHasEnPassantFlag(Piece [][] board){
+        Piece p;
+        for(int y = 0; y < 8; y++){
+            for(int x = 0; x < 8; x++){
+                p = board[y][x];
+                if(p instanceof Bauer b){
+                    if(b.isEnPassantPossible()) {
+                        return new Koordinaten(x, y);
+                    }
+                }
+            }
+        }
+        return null;
     }
 }

@@ -73,4 +73,123 @@ public class Board {
         }
         return kopie;
     }
+    public static String boardToString(Piece[][] board, boolean whiteToMove) {
+        StringBuilder sb = new StringBuilder();
+        for (Piece[] pieces : board) {
+            for (Piece p : pieces) {
+                switch (p) {
+                    case Empty empty -> sb.append(".");
+                    case Bauer bauer -> {
+                        sb.append(p.isWhite() ? "P" : "p");
+                        sb.append(bauer.isEnPassantPossible() ? "y" : "n");
+                    }
+                    case Turm turm -> {
+                        sb.append(p.isWhite() ? "R" : "r");
+                        sb.append(turm.kannRochieren() ? "y" : "n");
+                    }
+                    case Springer springer -> sb.append(p.isWhite() ? "N" : "n");
+                    case Laeufer laeufer -> sb.append(p.isWhite() ? "B" : "b");
+                    case Dame dame -> sb.append(p.isWhite() ? "Q" : "q");
+                    case Koenig koenig -> {
+                        sb.append(p.isWhite() ? "K" : "k");
+                        sb.append(koenig.kannRochieren() ? "y" : "n");
+                    }
+                    case null, default -> sb.append("?"); // falls du mal eine neue Figurklasse einbaust
+                }
+            }
+            sb.append("/"); // Trenner zwischen Reihen
+        }
+        sb.append(whiteToMove ? "w" : "b");
+        return sb.toString();
+    }
+
+    public static Piece[][] fenToBoard(String fen) {
+        Piece[][] board = new Piece[8][8];
+
+        String[] parts = fen.split(" ");
+        String boardPart = parts[0];
+        String activeColor = parts[1];
+        String castlingRights = parts[2];
+        String enPassant = parts[3];
+
+        String[] rows = boardPart.split("/");
+
+        for (int y = 0; y < 8; y++) {
+            String row = rows[y];
+            int x = 0;
+
+            for (char c : row.toCharArray()) {
+                if (Character.isDigit(c)) {
+                    int empty = c - '0';
+                    for (int i = 0; i < empty; i++) {
+                        board[y][x] = new Empty();
+                        x++;
+                    }
+                } else {
+                    board[y][x] = createPieceFromFenChar(c);
+                    x++;
+                }
+            }
+        }
+
+        // --- Castling rights ---
+        if (!castlingRights.equals("-")) {
+            for (char c : castlingRights.toCharArray()) {
+                if (c == 'K') { // White kingside
+                    if (board[7][4] instanceof Koenig k && k.isWhite())
+                        k.setKannRochieren(true);
+                    if (board[7][7] instanceof Turm r && r.isWhite())
+                        r.setKannRochieren(true);
+                } else if (c == 'Q') { // White queenside
+                    if (board[7][4] instanceof Koenig k2 && k2.isWhite())
+                        k2.setKannRochieren(true);
+                    if (board[7][0] instanceof Turm r2 && r2.isWhite())
+                        r2.setKannRochieren(true);
+                } else if (c == 'k') { // Black kingside
+                    if (board[0][4] instanceof Koenig k3 && !k3.isWhite())
+                        k3.setKannRochieren(true);
+                    if (board[0][7] instanceof Turm r3 && !r3.isWhite())
+                        r3.setKannRochieren(true);
+                } else if (c == 'q') { // Black queenside
+                    if (board[0][4] instanceof Koenig k4 && !k4.isWhite())
+                        k4.setKannRochieren(true);
+                    if (board[0][0] instanceof Turm r4 && !r4.isWhite())
+                        r4.setKannRochieren(true);
+                }
+            }
+        }
+
+        // --- En Passant ---
+        if (!enPassant.equals("-")) {
+            int epX = enPassant.charAt(0) - 'a';
+            int epY = 8 - Character.getNumericValue(enPassant.charAt(1));
+
+            if (activeColor.equals("w")) {
+                // Black just pushed -> mark black pawn
+                if (board[epY + 1][epX] instanceof Bauer b && !b.isWhite())
+                    b.setEnPassantPossible(true);
+            } else {
+                // White just pushed -> mark white pawn
+                if (board[epY - 1][epX] instanceof Bauer b && b.isWhite())
+                    b.setEnPassantPossible(true);
+            }
+        }
+
+        return board;
+    }
+
+    private static Piece createPieceFromFenChar(char c) {
+        boolean isWhite = Character.isUpperCase(c);
+        char lower = Character.toLowerCase(c);
+
+        return switch (lower) {
+            case 'p' -> new Bauer(isWhite);
+            case 'r' -> new Turm(isWhite);
+            case 'n' -> new Springer(isWhite);
+            case 'b' -> new Laeufer(isWhite);
+            case 'q' -> new Dame(isWhite);
+            case 'k' -> new Koenig(isWhite);
+            default -> null;
+        };
+    }
 }

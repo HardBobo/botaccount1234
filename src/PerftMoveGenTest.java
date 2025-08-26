@@ -1,22 +1,38 @@
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 
 public class PerftMoveGenTest {
         static Piece [][] temp;
-    public static void main(String[] args) {
+    public static void main(String[] args) throws NoSuchAlgorithmException {
         temp = new Piece[8][8];
-        Board.setupBoard(temp);
-        MoveFinder.doMove(new Zug("g1f3"), temp);
-        MoveFinder.doMove(new Zug("h7h6"), temp);
+        temp = Board.fenToBoard("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1");
+//        MoveFinder.doMove(new Zug("d5e6"), temp);
+//        MoveFinder.doMove(new Zug("e8g8"), temp);
+//        MoveFinder.doMove(new Zug("e6d7"), temp);
         perftDivide(temp, 5, true); // Will show all root moves and their node counts
     }
 
-    public static void perftDivide(Piece [][] board, int depth, boolean isWhite) {
+    public static void perftDivide(Piece [][] board, int depth, boolean isWhite) throws NoSuchAlgorithmException {
         ArrayList<Zug> moves = MoveFinder.possibleMoves(isWhite, board);
         MoveOrdering.orderMoves(moves, board, isWhite);
 
         int total = 0;
         for (Zug zug : moves) {
             MoveInfo info = MoveFinder.saveMoveInfo(zug, board);
+            String text = Board.boardToString(board, isWhite);
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+
+            // Bytes vom String holen und durch den Hasher jagen
+            byte[] hashBytes = md.digest(text.getBytes());
+
+            // in Hex-String umwandeln
+            String hashHex = HexFormat.of().formatHex(hashBytes);
+
+            System.out.println("Hash: " + hashHex);
+
             boolean success = MoveFinder.doMove(zug, board);
 
             if(!success)

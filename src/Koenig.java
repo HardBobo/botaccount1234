@@ -68,36 +68,40 @@ public class Koenig extends Piece {
             }
         }
         if (isWhite) {
-            if(board[7][5] instanceof Empty
-                    && board[7][6] instanceof Empty
-                    && board[7][7] instanceof Turm t
-                    && t.kannRochieren()) {
-                zug = new Zug("e1g1");
-                moegliche.add(zug);
-            }
-            if(board[7][3] instanceof Empty
-                    && board[7][2] instanceof Empty
-                    && board[7][1] instanceof Empty
-                    && board[7][0] instanceof Turm t
-                    && t.kannRochieren()){
-                zug = new Zug("e1c1");
-                moegliche.add(zug);
+            if (board[7][4] instanceof Koenig k && k.isWhite() && k.kannRochieren()) {
+                if(board[7][5] instanceof Empty
+                        && board[7][6] instanceof Empty
+                        && board[7][7] instanceof Turm t
+                        && t.kannRochieren()) {
+                    zug = new Zug("e1g1");
+                    moegliche.add(zug);
+                }
+                if(board[7][3] instanceof Empty
+                        && board[7][2] instanceof Empty
+                        && board[7][1] instanceof Empty
+                        && board[7][0] instanceof Turm t
+                        && t.kannRochieren()){
+                    zug = new Zug("e1c1");
+                    moegliche.add(zug);
+                }
             }
         } else {
-            if(board[0][5] instanceof Empty
-                    && board[0][6] instanceof Empty
-                    && board[0][7] instanceof Turm t
-                    && t.kannRochieren()) {
-                zug = new Zug("e8g8");
-                moegliche.add(zug);
-            }
-            if(board[0][3] instanceof Empty
-                    && board[0][2] instanceof Empty
-                    && board[0][1] instanceof Empty
-                    && board[0][0] instanceof Turm t
-                    && t.kannRochieren()){
-                zug = new Zug("e8c8");
-                moegliche.add(zug);
+            if (board[0][4] instanceof Koenig k && !k.isWhite() && k.kannRochieren()) {
+                if(board[0][5] instanceof Empty
+                        && board[0][6] instanceof Empty
+                        && board[0][7] instanceof Turm t
+                        && t.kannRochieren()) {
+                    zug = new Zug("e8g8");
+                    moegliche.add(zug);
+                }
+                if(board[0][3] instanceof Empty
+                        && board[0][2] instanceof Empty
+                        && board[0][1] instanceof Empty
+                        && board[0][0] instanceof Turm t
+                        && t.kannRochieren()){
+                    zug = new Zug("e8c8");
+                    moegliche.add(zug);
+                }
             }
         }
         return moegliche;
