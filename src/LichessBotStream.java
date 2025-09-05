@@ -131,20 +131,24 @@ public class LichessBotStream {
                                         if (isWhite) {
                                             if (isMyTurn(moves, "white")) {
                                                 Zug zug = OpeningDictionary.getNextOpeningMove(moves);
-                                                if(zug != null)
+                                                if(zug != null){
                                                     playMove(gameId, Objects.requireNonNull(OpeningDictionary.getNextOpeningMove(moves)).processZug());
+                                                }
                                                 else {
                                                     temp = Board.copy(Board.brett);
+                                                    Zobrist.initZobrist();
                                                     playMove(gameId, MoveFinder.iterativeDeepening(temp,true).processZug());
                                                 }
                                             }
                                         } else {
                                             if (isMyTurn(moves, "black")) {
                                                 Zug zug = OpeningDictionary.getNextOpeningMove(moves);
-                                                if(zug != null)
+                                                if(zug != null){
                                                     playMove(gameId, Objects.requireNonNull(OpeningDictionary.getNextOpeningMove(moves)).processZug());
+                                                }
                                                 else {
                                                     temp = Board.copy(Board.brett);
+                                                    Zobrist.initZobrist();
                                                     playMove(gameId, MoveFinder.iterativeDeepening(temp, false).processZug());
                                                 }
                                             }

@@ -8,7 +8,7 @@ public class PerftMoveGenTest {
         static Piece [][] temp;
     public static void main(String[] args) throws NoSuchAlgorithmException {
         temp = new Piece[8][8];
-        temp = Board.fenToBoard("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - ");
+        temp = Board.fenToBoard("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1");
 //        MoveFinder.doMove(new Zug("d5e6"), temp);
 //        MoveFinder.doMove(new Zug("e8g8"), temp);
 //        MoveFinder.doMove(new Zug("e6d7"), temp);

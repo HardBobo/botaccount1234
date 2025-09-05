@@ -3,6 +3,12 @@ import java.util.*;
 public class MoveFinder {
     private static long nodes = 0;     // Knoten-Zähler
     private static long startTime = 0; // Startzeit für Messung
+
+    static final int EXACT = 0;
+    static final int LOWERBOUND = 1;
+    static final int UPPERBOUND = 2;
+
+    static Map<Long, TTEntry> transpositionTable = new HashMap<>();
     public MoveFinder(){
 
     }
@@ -59,8 +65,6 @@ public class MoveFinder {
 
         if(orderedMoves.isEmpty()) return null;
 
-        Zug bestMove = orderedMoves.getFirst();
-
         for(Zug zug : orderedMoves){// do move und undo move damit nicht dauerhaft neue teure kopien des boards erstellt werden
 
             MoveInfo info = saveMoveInfo(zug, board);
@@ -87,12 +91,26 @@ public class MoveFinder {
         System.out.println("Time elapsed: " + elapsed + " ms");
         System.out.println("Speed: " + (long)nps + " nodes/s");
 
-        ArrayList<Zug> temp = new ArrayList<>(bestMoves.values());
-        return temp;
+        return new ArrayList<>(bestMoves.values());
     }
     private static int negamax(Piece [][] board, int depth, int alpha, int beta, boolean isWhite) {
 
         nodes++;
+
+        int alphaOrig = alpha;
+        long hash = Zobrist.computeHash(board, isWhite);
+
+        TTEntry entry = transpositionTable.get(hash);
+
+        if (entry != null && entry.isValid && entry.depth >= depth) {
+            if (entry.flag == EXACT) {
+                return entry.value;
+            } else if (entry.flag == LOWERBOUND && entry.value >= beta) {
+                return entry.value;
+            } else if (entry.flag == UPPERBOUND && entry.value <= alpha) {
+                return entry.value;
+            }
+        }
 
         if (depth == 0)
             return evaluation(board, isWhite);
@@ -131,6 +149,18 @@ public class MoveFinder {
             if(alpha >= beta)
                 break; //alpha beta cutoff
         }
+
+        int flag;
+        if (value <= alphaOrig) {
+            flag = UPPERBOUND;
+        } else if (value >= beta) {
+            flag = LOWERBOUND;
+        } else {
+            flag = EXACT;
+        }
+
+        transpositionTable.put(hash, new TTEntry(value, depth, flag));
+
         return value;
     }
 
@@ -307,7 +337,7 @@ public class MoveFinder {
     public static Zug iterativeDeepening (Piece[][] board, boolean isWhite){
         ArrayList<Zug> order = possibleMoves(isWhite, board);
 
-        for(int i = 1; i<6; i++) {
+        for(int i = 1; i<5; i++) {
             System.out.println("Tiefe: " + i);
 
             order = (findBestMoves(board, i, isWhite,order));
@@ -453,4 +483,45 @@ public class MoveFinder {
 
         return !kingInCheck;
     }
+    public static boolean[] getCastleRights(Piece[][] board) {
+        // [whiteShort, whiteLong, blackShort, blackLong]
+        boolean[] rights = new boolean[4];
+
+        // Weiß kurze Rochade (König e1, Turm h1)
+        if (board[7][4] instanceof Koenig k && board[7][4].isWhite() &&
+                board[7][7] instanceof Turm t && board[7][7].isWhite()
+                && k.kannRochieren()
+                && t.kannRochieren()) {
+            rights[0] = true;
+        }
+
+        // Weiß lange Rochade (König e1, Turm a1)
+        if (board[7][4] instanceof Koenig k && board[7][4].isWhite() &&
+                board[7][0] instanceof Turm t && board[7][0].isWhite()
+                && k.kannRochieren()
+                && t.kannRochieren()) {
+            rights[1] = true;
+        }
+
+        // Schwarz kurze Rochade (König e8, Turm h8)
+        if (board[0][4] instanceof Koenig k && !board[0][4].isWhite() &&
+                board[0][7] instanceof Turm t && !board[0][7].isWhite()
+                && k.kannRochieren()
+                && t.kannRochieren()) {
+            rights[2] = true;
+        }
+
+        // Schwarz lange Rochade (König e8, Turm a8)
+        if (board[0][4] instanceof Koenig k
+                && !board[0][4].isWhite()
+                && board[0][0] instanceof Turm t
+                && !board[0][0].isWhite()
+                && k.kannRochieren()
+                && t.kannRochieren()) {
+            rights[3] = true;
+        }
+
+        return rights;
+    }
+
 }
