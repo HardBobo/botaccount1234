@@ -456,7 +456,7 @@ public class MoveFinder {
     }
     private static Koordinaten bauerHasEnPassantFlag(Piece [][] board){
         Piece p;
-        for(int y = 0; y < 8; y++){
+        for(int y = 3; y <= 4; y++){
             for(int x = 0; x < 8; x++){
                 p = board[y][x];
                 if(p instanceof Bauer b){
