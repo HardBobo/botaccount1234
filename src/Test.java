@@ -5,17 +5,17 @@ public class Test {
 
     public static void main(String [] args){
         temp = new Piece[8][8];
-        temp = Board.fenToBoard("r2k4/1p2R3/p2p2b1/2B4p/1P5P/1KP4B/Pn6/5R2 b - - 0 41");
+        temp = Board.fenToBoard("r2qkb1r/pp2nppp/3p4/2pNN1B1/2BnP3/3P4/PPP2PPP/R2bK2R w KQkq - 1 0\n");
         test1();
     }
     public static void test1(){
         // Startzeit für Messung
         long startTime = System.currentTimeMillis();
 
-        ArrayList<Zug> pM = MoveFinder.possibleMoves(false, temp);
-        MoveOrdering.orderMoves(pM, temp, false);
+        ArrayList<Zug> pM = MoveFinder.possibleMoves(true, temp);
+        MoveOrdering.orderMoves(pM, temp, true);
 
-        System.out.println(MoveFinder.findBestMoves(temp, 3, false, pM).getFirst().processZug());
+        System.out.println(MoveFinder.findBestMoves(temp, 5, true, pM).getFirst().processZug());
 
         long elapsed = System.currentTimeMillis() - startTime;
         System.out.println("Time elapsed: " + elapsed + " ms");

@@ -6,16 +6,20 @@ import java.util.HexFormat;
 
 public class PerftMoveGenTest {
         static Piece [][] temp;
+    private static long startTime = 0;
     public static void main(String[] args) throws NoSuchAlgorithmException {
         temp = new Piece[8][8];
-        temp = Board.fenToBoard("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1");
-//        MoveFinder.doMove(new Zug("d5e6"), temp);
-//        MoveFinder.doMove(new Zug("e8g8"), temp);
-//        MoveFinder.doMove(new Zug("e6d7"), temp);
-        perftDivide(temp, 5, true); // Will show all root moves and their node counts
+        Board.setupBoard(temp);
+//        temp = Board.fenToBoard("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1");
+////        MoveFinder.doMove(new Zug("d5e6"), temp);
+////        MoveFinder.doMove(new Zug("e8g8"), temp);
+////        MoveFinder.doMove(new Zug("e6d7"), temp);
+        perftDivide(temp, 6, true); // Will show all root moves and their node counts
     }
 
     public static void perftDivide(Piece [][] board, int depth, boolean isWhite) throws NoSuchAlgorithmException {
+        startTime = System.currentTimeMillis();
+
         ArrayList<Zug> moves = MoveFinder.possibleMoves(isWhite, board);
 
         moves.removeIf(zug -> !MoveFinder.isLegalMove(zug, board, isWhite));
@@ -36,7 +40,7 @@ public class PerftMoveGenTest {
 
             System.out.println("Hash: " + hashHex);
 
-            boolean success = MoveFinder.doMove(zug, board);
+            boolean success = MoveFinder.doMove(zug, board, info);
 
             if(!success)
                 continue;
@@ -47,6 +51,12 @@ public class PerftMoveGenTest {
             MoveFinder.undoMove(zug, board, info);
             total += nodes;
         }
+        long elapsed = System.currentTimeMillis() - startTime;
+        double nps = (total * 1000.0) / (elapsed + 1);
+        System.out.println("Nodes: " + total);
+        System.out.println("Time elapsed: " + elapsed + " ms");
+        System.out.println("Speed: " + (long)nps + " nodes/s");
+
         System.out.println("Total: " + total);
     }
 
@@ -62,7 +72,7 @@ public class PerftMoveGenTest {
         int count = 0;
         for (Zug zug : moves) {
             MoveInfo info = MoveFinder.saveMoveInfo(zug, board);
-            boolean success = MoveFinder.doMove(zug, board);
+            boolean success = MoveFinder.doMove(zug, board, info);
 
             if(!success)
                 continue;

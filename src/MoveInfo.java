@@ -9,4 +9,10 @@ public class MoveInfo {
     public Piece movingPiece;
     public Koordinaten enPassantBauerCoords;
     public boolean wasEnPassantCapturable;
+    public long oldHash;
+    public Piece capturedPiece;
+    public Koordinaten capEnPassantBauerCoords;
+    public boolean wasEnPassant;
+    public boolean wasPromotion;
+    public Piece promotionPiece;
 }

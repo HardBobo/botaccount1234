@@ -101,6 +101,8 @@ public class LichessBotStream {
                                     // mit status mate stalemate resign draw oder outoftime | angebot zu unentschieden wird immer ignoriert
                                 }
                                 else if ("gameFull".equals(type)) { // erster state nach gamestart
+//                                    Zobrist.initZobrist();
+//                                    MoveFinder.currentHash = Zobrist.computeHash(Board.brett, isWhite);
                                     if(isWhite)
                                         playMove(gameId, Objects.requireNonNull(OpeningDictionary.getNextOpeningMove("")).processZug());
                                 } else if ("gameState".equals(type)) { // normaler gamestate
@@ -122,9 +124,12 @@ public class LichessBotStream {
                                         moveList = moves.isEmpty() ? new String[0] : moves.split(" "); // array auch
                                         moveCount = moveList.length; // auch anzahl
                                         if (moveCount > lastProcessedMoveCount) { // stellungsupdate
+                                            Zug zug;
                                             for (int i = lastProcessedMoveCount; i < moveList.length; i++) {
                                                 //System.out.println("Neuer Zug erkannt: " + moveList[i]);
-                                                spiel.playMove(new Zug(moveList[i]));
+                                                zug = new Zug(moveList[i]);
+                                                MoveInfo info = MoveFinder.saveMoveInfo(zug, Board.brett);
+                                                MoveFinder.doMove(new Zug(moveList[i]), Board.brett, info);
                                             }
                                             lastProcessedMoveCount = moveList.length;
                                         }
@@ -136,7 +141,6 @@ public class LichessBotStream {
                                                 }
                                                 else {
                                                     temp = Board.copy(Board.brett);
-                                                    Zobrist.initZobrist();
                                                     playMove(gameId, MoveFinder.iterativeDeepening(temp,true).processZug());
                                                 }
                                             }
@@ -148,7 +152,6 @@ public class LichessBotStream {
                                                 }
                                                 else {
                                                     temp = Board.copy(Board.brett);
-                                                    Zobrist.initZobrist();
                                                     playMove(gameId, MoveFinder.iterativeDeepening(temp, false).processZug());
                                                 }
                                             }

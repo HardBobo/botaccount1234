@@ -4,9 +4,11 @@ public class MoveFinder {
     private static long nodes = 0;     // Knoten-Zähler
     private static long startTime = 0; // Startzeit für Messung
 
-    static final int EXACT = 0;
-    static final int LOWERBOUND = 1;
-    static final int UPPERBOUND = 2;
+//    static final int EXACT = 0;
+//    static final int LOWERBOUND = 1;
+//    static final int UPPERBOUND = 2;
+//
+//    static long currentHash = 0;
 
     static Map<Long, TTEntry> transpositionTable = new HashMap<>();
     public MoveFinder(){
@@ -24,103 +26,90 @@ public class MoveFinder {
         }
         return pM;
     }
-    public static int evaluation (Piece[][] board, boolean isWhite){
-        int score = 0;
-        for (int y = 0; y < 8; y++) {
-            for (int x = 0; x < 8; x++) {
-                Piece p = board[y][x];
-                Koordinaten k = new Koordinaten(x,y);
-                if (p != null) {
-                    if (isWhite) {
-                        if (p.isWhite()) {
-                            score += p.getValue();
-                            score += Evaluation.evalWithPosition(k, board, true);
-                        }
-                        else {
-                            score -= p.getValue();
-                            score -= Evaluation.evalWithPosition(k, board, false);
-                        }
-                    } else {
-                        if (p.isWhite()) {
-                            score -= p.getValue();
-                            score -= Evaluation.evalWithPosition(k, board, true);
-                        }
-                        else {
-                            score += p.getValue();
-                            score += Evaluation.evalWithPosition(k, board, false);
-                        }
-                    }
-                }
-            }
-        }
-        return score;
-    }
-    public static ArrayList<Zug> findBestMoves(Piece[][] board, int depth, boolean isWhite, ArrayList<Zug> orderedMoves){
+
+    public static ArrayList<Zug> findBestMoves(Piece[][] board, int depth, boolean isWhite, ArrayList<Zug> orderedMoves) {
         nodes = 0;
         startTime = System.currentTimeMillis();
 
-        TreeMap<Integer, Zug> bestMoves = new TreeMap<>();
-
+        // Remove illegal moves
         orderedMoves.removeIf(zug -> !isLegalMove(zug, board, isWhite));
+        if (orderedMoves.isEmpty()) return new ArrayList<>();
 
-        if(orderedMoves.isEmpty()) return null;
+        // List to hold moves with their scores
+        ArrayList<ZugScore> scoredMoves = new ArrayList<>();
 
-        for(Zug zug : orderedMoves){// do move und undo move damit nicht dauerhaft neue teure kopien des boards erstellt werden
-
+        for (Zug zug : orderedMoves) {
             MoveInfo info = saveMoveInfo(zug, board);
+            boolean success = doMove(zug, board, info);
+            if (!success) continue;
 
-            boolean success = doMove(zug, board);
-
-            if(!success)
-                continue;
-
-            int score = negamax(board, depth, Integer.MIN_VALUE, Integer.MAX_VALUE, !isWhite);
+            // Negate score to get perspective of current player
+            int score = -negamax(board, depth, Integer.MIN_VALUE, Integer.MAX_VALUE, !isWhite);
 
             undoMove(zug, board, info);
 
-            if(isWhite){
-                bestMoves.put(score, zug);
-            } else {
-                bestMoves.put(score, zug);
-            }
+            scoredMoves.add(new ZugScore(zug, score));
         }
+
+        // Sort moves descending by score (best moves first)
+        scoredMoves.sort((a, b) -> Integer.compare(b.score, a.score));
 
         long elapsed = System.currentTimeMillis() - startTime;
         double nps = (nodes * 1000.0) / (elapsed + 1);
         System.out.println("Nodes: " + nodes);
         System.out.println("Time elapsed: " + elapsed + " ms");
-        System.out.println("Speed: " + (long)nps + " nodes/s");
+        System.out.println("Speed: " + (long) nps + " nodes/s");
 
-        return new ArrayList<>(bestMoves.values());
+        // Extract sorted moves
+        ArrayList<Zug> sortedMoves = new ArrayList<>();
+        for (ZugScore zs : scoredMoves) {
+            System.out.println(zs.zug.processZug() + " " + zs.score);
+            sortedMoves.add(zs.zug);
+        }
+
+        return sortedMoves;
     }
+
+    // Helper class to hold move and score
+    static class ZugScore {
+        Zug zug;
+        int score;
+
+        ZugScore(Zug zug, int score) {
+            this.zug = zug;
+            this.score = score;
+        }
+    }
+
+
     private static int negamax(Piece [][] board, int depth, int alpha, int beta, boolean isWhite) {
 
         nodes++;
 
-        int alphaOrig = alpha;
-        long hash = Zobrist.computeHash(board, isWhite);
-
-        TTEntry entry = transpositionTable.get(hash);
-
-        if (entry != null && entry.isValid && entry.depth >= depth) {
-            if (entry.flag == EXACT) {
-                return entry.value;
-            } else if (entry.flag == LOWERBOUND && entry.value >= beta) {
-                return entry.value;
-            } else if (entry.flag == UPPERBOUND && entry.value <= alpha) {
-                return entry.value;
-            }
-        }
+//        int alphaOrig = alpha;
+//        long hash = currentHash;
+//
+//        TTEntry entry = transpositionTable.get(hash);
+//
+//        if (entry != null && entry.isValid && entry.depth >= depth) {
+//            if (entry.flag == EXACT) {
+//                return entry.value;
+//            } else if (entry.flag == LOWERBOUND && entry.value >= beta) {
+//                return entry.value;
+//            } else if (entry.flag == UPPERBOUND && entry.value <= alpha) {
+//                return entry.value;
+//            }
+//        }
 
         if (depth == 0)
-            return evaluation(board, isWhite);
+            return Evaluation.evaluation(board, isWhite);
 
         ArrayList<Zug> pseudoLegalMoves = possibleMoves(isWhite, board);
 
         pseudoLegalMoves.removeIf(zug -> !isLegalMove(zug, board, isWhite));
 
         if (pseudoLegalMoves.isEmpty()) {
-            if (Spiel.inCheck(board, isWhite)) {
+            if (inCheck(board, isWhite)) {
                 return -(100000 + depth);
             } else {
                 return 0;
@@ -134,7 +123,7 @@ public class MoveFinder {
 
             MoveInfo info = saveMoveInfo(zug, board);
 
-            boolean success = doMove(zug, board);
+            boolean success = doMove(zug, board, info);
 
             if(!success)
                 continue;
@@ -150,89 +139,32 @@ public class MoveFinder {
                 break; //alpha beta cutoff
         }
 
-        int flag;
-        if (value <= alphaOrig) {
-            flag = UPPERBOUND;
-        } else if (value >= beta) {
-            flag = LOWERBOUND;
-        } else {
-            flag = EXACT;
-        }
+//        int flag;
+//        if (value <= alphaOrig) {
+//            flag = UPPERBOUND;
+//        } else if (value >= beta) {
+//            flag = LOWERBOUND;
+//        } else {
+//            flag = EXACT;
+//        }
 
-        transpositionTable.put(hash, new TTEntry(value, depth, flag));
+//        transpositionTable.put(hash, new TTEntry(value, depth, flag));
 
         return value;
     }
 
-    private static int qSearch(Piece [][] board, int alpha, int beta, boolean isWhite){
+    public static boolean doMove(Zug zug, Piece[][] board, MoveInfo info) {
 
-        ArrayList<Zug> moves = possibleMoves(isWhite, board);
+//        boolean [] castleRightsBefore = getCastleRights(board);
+//        int epBefore = Zobrist.getEnPassantFile(board, board[zug.startY][zug.startX].isWhite());
 
-        moves.removeIf(zug -> !isLegalMove(zug, board, isWhite));
-
-        if (moves.isEmpty()) {
-            if (Spiel.inCheck(board, isWhite)) {
-                return -100000;
-            } else {
-                return 0;
-            }
-        }
-
-        int static_eval = evaluation(board, isWhite);
-
-        int best_value = static_eval;
-
-        if( best_value >= beta ) {
-            return best_value;
-        }
-
-        if( best_value > alpha )
-            alpha = best_value;
-
-
-        ArrayList<Zug> forcingMoves = new ArrayList<>();
-
-        for(Zug zug : moves){
-            if(Spiel.isCapture(zug, board))
-                forcingMoves.add(zug);
-        }
-
-        MoveOrdering.orderMoves(forcingMoves, board, isWhite);
-
-        for(Zug zug : forcingMoves)  {
-
-            MoveInfo info = saveMoveInfo(zug, board);
-            boolean success = doMove(zug, board);
-
-            if(!success)
-                continue;
-
-            int score = -qSearch(board, -beta, -alpha, !isWhite);
-
-            undoMove(zug, board, info);
-
-
-            if( score >= beta ) {
-                return score;
-            }
-            if( score > best_value )
-                best_value = score;
-            if( score > alpha )
-                alpha = score;
-        }
-        return best_value;
-    }
-    public static boolean doMove(Zug zug, Piece[][] board) {
-        boolean moveExecuted = false;
         boolean bauerDoppelZug = bauerDoppel(zug, board);
 
         if (rochade(zug, board)) {
             if(kurze(zug) && kurzePossible(zug, board)) { // kurze Rochade
                 kurzeRochade(zug, board);
-                moveExecuted = true;
             } else if(!kurze(zug) && langePossible(zug, board)){ // lange Rochade
                 langeRochade(zug, board);
-                moveExecuted = true;
             } else {
                 return false;
             }
@@ -241,12 +173,10 @@ public class MoveFinder {
         // En-Passant
         if (enPassant(zug, board)) {
             enPassantExe(zug, board);
-            moveExecuted = true;
         }
 
         //Normaler Zug
         normalTurnExe(zug, board);
-        moveExecuted = true;
 
         //Promotion
         if (promotion(zug, board)) {
@@ -266,17 +196,42 @@ public class MoveFinder {
         if (board[zug.endY][zug.endX] instanceof Koenig k) {
             k.setKannRochieren(false);
         }
-        return moveExecuted;
+
+//        boolean [] castleRightsAfter = getCastleRights(board);
+//        int epAfter = Zobrist.getEnPassantFile(board, board[zug.startY][zug.startX].isWhite());
+//
+//        currentHash = Zobrist.updateHash(currentHash, zug, info, board, castleRightsBefore, castleRightsAfter, epBefore, epAfter);
+
+        return true;
     }
     public static MoveInfo saveMoveInfo(Zug zug, Piece[][] board) {
         MoveInfo info = new MoveInfo();
         Piece movingPiece = board[zug.startY][zug.startX];
         Piece targetPiece = board[zug.endY][zug.endX];
+        boolean whiteToMove = movingPiece.isWhite();
+
+//        info.oldHash = currentHash;
 
         info.enPassantBauerCoords = bauerHasEnPassantFlag(board);
 
         if(movingPiece instanceof Bauer){
             info.wasEnPassantCapturable = ((Bauer) movingPiece).isEnPassantPossible();
+            if(wasEnPassant(zug, board, targetPiece)){
+                info.wasEnPassant = true;
+                info.capturedPiece = board[zug.startY][zug.endX];
+                info.capEnPassantBauerCoords = new Koordinaten(zug.endX, zug.startY);
+            }
+            if(promotion(zug, board)) {
+                info.wasPromotion = true;
+                char c = zug.promoteTo;
+                info.promotionPiece = switch (c){
+                    case 'q' -> new Dame(whiteToMove);
+                    case 'b' -> new Laeufer(whiteToMove);
+                    case 'n' -> new Springer(whiteToMove);
+                    case 'r' -> new Turm(whiteToMove);
+                    default -> null;
+                };
+            }
         }
 
         if(movingPiece instanceof Koenig){
@@ -332,12 +287,14 @@ public class MoveFinder {
             ((Turm) rook).setKannRochieren(true);
             board[zug.endY][info.rookEndX] = new Empty();
         }
+
+//        currentHash = info.oldHash;
     }
 
     public static Zug iterativeDeepening (Piece[][] board, boolean isWhite){
         ArrayList<Zug> order = possibleMoves(isWhite, board);
 
-        for(int i = 1; i<5; i++) {
+        for(int i = 1; i<6; i++) {
             System.out.println("Tiefe: " + i);
 
             order = (findBestMoves(board, i, isWhite,order));
@@ -346,19 +303,19 @@ public class MoveFinder {
 
         return order.getFirst();
     }
-    private static boolean wasEnPassant(Zug zug, Piece[][] board, Piece squareMovedOnto){
+    public static boolean wasEnPassant(Zug zug, Piece[][] board, Piece squareMovedOnto){
         if(board[zug.startY][zug.startX] instanceof Bauer && squareMovedOnto instanceof Empty && Math.abs(zug.endX - zug.startX) == 1){
             return true;
         }
         return false;
     }
-    private static boolean rochade(Zug zug, Piece [][] board){
+    public static boolean rochade(Zug zug, Piece [][] board){
         return board[zug.startY][zug.startX] instanceof Koenig && Math.abs(zug.endX - zug.startX) == 2;
     }
-    private static boolean kurze(Zug zug){
+    public static boolean kurze(Zug zug){
         return zug.endX > zug.startX;
     }
-    private static boolean kurzePossible(Zug zug, Piece [][] board){
+    public static boolean kurzePossible(Zug zug, Piece [][] board){
         int startX = zug.startX;
         int startY = zug.startY;
         boolean gegner = !board[startY][startX].isWhite();
@@ -375,7 +332,7 @@ public class MoveFinder {
         board[zug.endY][5] = board[zug.endY][7];
         board[zug.endY][7] = new Empty();
     }
-    private static boolean langePossible(Zug zug, Piece [][] board){
+    public static boolean langePossible(Zug zug, Piece [][] board){
         int startX = zug.startX;
         int startY = zug.startY;
         boolean gegner = !board[startY][startX].isWhite();
@@ -449,14 +406,14 @@ public class MoveFinder {
     public static boolean bauerDoppel(Zug zug, Piece [][] board){
         return Math.abs(zug.endY - zug.startY) == 2 && board[zug.startY][zug.startX] instanceof Bauer;
     }
-    private static void enPassantResetExe(Piece [][] board, Zug zug){
+    public static void enPassantResetExe(Piece [][] board, Zug zug){
         board[zug.endY][zug.endX] = new Empty();
         board[zug.startY][zug.endX] = new Bauer(!board[zug.startY][zug.startX].isWhite());
         ((Bauer) board[zug.startY][zug.endX]).setEnPassantPossible(true);
     }
-    private static Koordinaten bauerHasEnPassantFlag(Piece [][] board){
+    public static Koordinaten bauerHasEnPassantFlag(Piece [][] board){
         Piece p;
-        for(int y = 0; y < 8; y++){
+        for(int y = 3; y <= 4; y++){
             for(int x = 0; x < 8; x++){
                 p = board[y][x];
                 if(p instanceof Bauer b){
@@ -468,16 +425,16 @@ public class MoveFinder {
         }
         return null;
     }
-    static boolean isLegalMove(Zug zug, Piece[][] board, boolean isWhite) {
+    public static boolean isLegalMove(Zug zug, Piece[][] board, boolean isWhite) {
         MoveInfo info = saveMoveInfo(zug, board);
-        boolean success = doMove(zug, board);
+        boolean success = doMove(zug, board, info);
 
         if (!success) {
             undoMove(zug, board, info);
             return false;
         }
 
-        boolean kingInCheck = Spiel.inCheck(board, isWhite);
+        boolean kingInCheck = inCheck(board, isWhite);
 
         undoMove(zug, board, info);
 
@@ -523,5 +480,8 @@ public class MoveFinder {
 
         return rights;
     }
-
+    public static boolean inCheck(Piece[][] board, boolean isWhite) {
+        Koordinaten coords = Spiel.kingCoordinates(isWhite, board);
+        return Spiel.isSquareAttacked(board, coords.x, coords.y, !isWhite);
+    }
 }

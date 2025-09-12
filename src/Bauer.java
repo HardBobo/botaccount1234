@@ -5,7 +5,7 @@ public class Bauer extends Piece {
     private boolean enPassantPossible;
 
     public Bauer(boolean istWeiss) {
-        super("Bauer", istWeiss, 100);
+        super(0, istWeiss);
         this.enPassantPossible = false;
     }
     public boolean isEnPassantPossible(){
@@ -13,26 +13,6 @@ public class Bauer extends Piece {
     }
     public void setEnPassantPossible(boolean wert){
         this.enPassantPossible = wert;
-    }
-    @Override
-    public List<Koordinaten> bedrohteFelder(int x, int y, Piece[][] board) {
-        List<Koordinaten> bedrohte = new ArrayList<>();
-
-        int richtung = this.isWhite() ? -1 : 1; //richtung
-
-        int zielY = y + richtung;
-
-        // links vorne
-        if (Spiel.imBrett(x - 1, zielY)) {
-            bedrohte.add(new Koordinaten(x - 1, zielY));
-        }
-
-        // rechts vorne
-        if (Spiel.imBrett(x + 1, zielY)) {
-            bedrohte.add(new Koordinaten(x + 1, zielY));
-        }
-
-        return bedrohte;
     }
 
     @Override
