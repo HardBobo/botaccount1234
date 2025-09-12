@@ -127,6 +127,91 @@ public class Evaluation {
             {-14, -18,  -7,  -1,  4,  -9, -15, -27},
             {-23,  -9, -23,  -5, -9, -16,  -5, -17}
     };
+    public static int evalForRelativScore (Koordinaten where, Piece[][] brett, boolean isWhite)
+    {
+        int value = 0;
+        Piece piece = brett[where.x][where.y];
+
+        switch (piece) {
+            case Springer springer -> {
+                value = value + (bauerCounter(brett, isWhite)*3);
+            }
+            case Laeufer laeufer -> {
+                value = value + laeufer.moeglicheZuege(where.x, where.y, brett).size();
+            }
+            case Turm turm -> {
+                value = value + turm.moeglicheZuege(where.x, where.y, brett).size();
+            }
+            case Bauer bauer -> {
+                if (endgame(brett) == true && hasThisFileAnEnemyPawn(brett,isWhite, where.x) == false)
+                {
+                    if(where.x == 0 && hasThisFileAnEnemyPawn(brett,isWhite, where.x+1) == false)
+                    {
+                        value = value +10;
+                        if(hasThisFileAnEnemyPawn(brett,!isWhite, where.x+1) == true)
+                            {
+                            value = value + 10;
+                            }
+                    }
+                    else if(where.x == 7 && hasThisFileAnEnemyPawn(brett,isWhite, where.x-1) == false)
+                    {
+                        value = value + 10;
+                        if(hasThisFileAnEnemyPawn(brett,!isWhite, where.x-1) == true)
+                        {
+                            value = value + 10;
+                        }
+                    }
+                    else if (hasThisFileAnEnemyPawn(brett,isWhite, where.x-1) == false && hasThisFileAnEnemyPawn(brett,isWhite, where.x+1) == false)
+                    {
+                        value = value + 10;
+                        if(hasThisFileAnEnemyPawn(brett,!isWhite, where.x+1) == true||hasThisFileAnEnemyPawn(brett,!isWhite, where.x-1) == true)
+                        {
+                            value = value + 10;
+                        }
+                    }
+                }
+            }
+            case Koenig koenig -> {
+                value = 0;
+            }
+            case Dame dame -> {
+                value = 0;
+            }
+            case Empty empty -> value = 0;
+            case null, default -> System.err.println("Fehler bei eval relativ");
+        }
+
+        return value;
+    }
+
+    public static boolean hasThisFileAnEnemyPawn (Piece[][] brett, boolean isWhite, int file)
+    {
+        boolean temp = false;
+        Piece p;
+        for (int i = 0; i < 8; i++) {
+            p =  brett[i][file];
+            if (p.getType().equals("Bauer") && p.isWhite() != isWhite)
+            {
+                temp = true;
+            }
+        }
+        return temp;
+    }
+    public static int bauerCounter (Piece[][] brett, boolean isWhite)
+    {
+        int count = 0;
+        Piece p;
+        for (int x = 0; x < 8; x++) {
+            for (int y = 0; y < 8; y++) {
+                p = brett[x][y];
+                if (p.getType().equals("Bauer"))
+                {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
     public static int evalWithPosition (Koordinaten where, Piece[][] brett, boolean iswhite)
     {
         //Methode die für die übergebene Figur einen Wert abhängig von der Position und dem Gamestate(End- oder MIddlegame) ausgibt

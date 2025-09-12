@@ -35,19 +35,23 @@ public class MoveFinder {
                         if (p.isWhite()) {
                             score += p.getValue();
                             score += Evaluation.evalWithPosition(k, board, true);
+                            score += Evaluation.evalForRelativScore(k, board, true);
                         }
                         else {
                             score -= p.getValue();
                             score -= Evaluation.evalWithPosition(k, board, false);
+                            score -= Evaluation.evalForRelativScore(k, board, false);
                         }
                     } else {
                         if (p.isWhite()) {
                             score -= p.getValue();
                             score -= Evaluation.evalWithPosition(k, board, true);
+                            score -= Evaluation.evalForRelativScore(k, board, true);
                         }
                         else {
                             score += p.getValue();
                             score += Evaluation.evalWithPosition(k, board, false);
+                            score += Evaluation.evalForRelativScore(k, board, false);
                         }
                     }
                 }
