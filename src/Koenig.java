@@ -6,7 +6,7 @@ public class Koenig extends Piece {
     private boolean kannRochieren;
 
     public Koenig(boolean istWeiss) {
-        super("König", istWeiss, 0);
+        super(5, istWeiss);
         this.kannRochieren = true;
     }
 
@@ -16,29 +16,6 @@ public class Koenig extends Piece {
 
     public void setKannRochieren(boolean b) {
         this.kannRochieren = b;
-    }
-
-    @Override
-    public List<Koordinaten> bedrohteFelder(int x, int y, Piece[][] board) {
-        List<Koordinaten> bedrohte = new ArrayList<>();
-
-        // 8 mögliche Richtungen
-        int[][] richtungen = {
-                { -1, -1 }, { 0, -1 }, { 1, -1 },
-                { -1, 0 },            { 1, 0 },
-                { -1, 1 },  { 0, 1 },  { 1, 1 }
-        };
-
-        for (int[] r : richtungen) {
-            int zielX = x + r[0];
-            int zielY = y + r[1];
-
-            if (Spiel.imBrett(zielX, zielY)) {
-                bedrohte.add(new Koordinaten(zielX, zielY));
-            }
-        }
-
-        return bedrohte;
     }
 
     @Override

@@ -3,11 +3,7 @@ import java.util.List;
 public class Empty extends Piece{
 
     public Empty(){
-        super("empty", true, 0);
-    }
-    @Override
-    public List<Koordinaten> bedrohteFelder(int x, int y, Piece[][] board) {
-        return null;
+        super(-1, true);
     }
 
     @Override
