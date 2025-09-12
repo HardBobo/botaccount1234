@@ -28,7 +28,7 @@ public class Evaluation {
             -36, -26, -12,  -1,  9, -7,   6, -23,
             -45, -25, -16, -17,  3,  0,  -5, -33,
             -44, -16, -20,  -9, -1, 11,  -6, -71,
-            -19, -13,   1,  2, 16,  -12, -37, -26};
+            -19, -13,   1,  17, 16,  7, -37, -26};
     // heat map für turm auch angepasst damit er weniger gerne einfach ohne zu rochieren auf den rochade platz geht
     // original: {-19, -13,   1,  17, 16,  7, -37, -26}};
     static int[] mg_queen = {
@@ -48,7 +48,7 @@ public class Evaluation {
             -49,  -1, -27, -39, -46, -44, -33, -51,
             -14, -14, -22, -46, -44, -30, -15, -27,
             1,   7,  -8, -64, -43, -16,   9,   8,
-            -15,  55,  30, -54,   8, -28,  66,  14};
+            -15,  36,  30, -54,   8, -28,  24,  14};
     // damit rochade attraktiver fuer den bot ist wurde die heatmap verändert unten ist orginal
     //      {-15,  36,  12, -54,   8, -28,  24,  14}};
     static int[] mg_knight = {

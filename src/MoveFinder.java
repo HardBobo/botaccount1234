@@ -63,8 +63,11 @@ public class MoveFinder {
         // Extract sorted moves
         ArrayList<Zug> sortedMoves = new ArrayList<>();
         for (ZugScore zs : scoredMoves) {
-            System.out.println(zs.zug.processZug() + " " + zs.score);
             sortedMoves.add(zs.zug);
+        }
+
+        for (ZugScore zs : scoredMoves.reversed()) {
+            System.out.println(zs.zug.processZug() + " " + zs.score);
         }
 
         return sortedMoves;
@@ -294,7 +297,7 @@ public class MoveFinder {
     public static Zug iterativeDeepening (Piece[][] board, boolean isWhite){
         ArrayList<Zug> order = possibleMoves(isWhite, board);
 
-        for(int i = 1; i<6; i++) {
+        for(int i = 1; i<5; i++) {
             System.out.println("Tiefe: " + i);
 
             order = (findBestMoves(board, i, isWhite,order));
