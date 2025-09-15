@@ -9,12 +9,12 @@ public class PerftMoveGenTest {
     private static long startTime = 0;
     public static void main(String[] args) throws NoSuchAlgorithmException {
         temp = new Piece[8][8];
-        Board.setupBoard(temp);
-//        temp = Board.fenToBoard("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1");
-////        MoveFinder.doMove(new Zug("d5e6"), temp);
-////        MoveFinder.doMove(new Zug("e8g8"), temp);
-////        MoveFinder.doMove(new Zug("e6d7"), temp);
-        perftDivide(temp, 6, true); // Will show all root moves and their node counts
+//        Board.setupBoard(temp);
+        temp = Board.fenToBoard("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - ");
+//        MoveFinder.doMove(new Zug("d5e6"), temp);
+//        MoveFinder.doMove(new Zug("e8g8"), temp);
+//        MoveFinder.doMove(new Zug("e6d7"), temp);
+        perftDivide(temp, 5, true); // Will show all root moves and their node counts
     }
 
     public static void perftDivide(Piece [][] board, int depth, boolean isWhite) throws NoSuchAlgorithmException {
@@ -40,10 +40,7 @@ public class PerftMoveGenTest {
 
             System.out.println("Hash: " + hashHex);
 
-            boolean success = MoveFinder.doMove(zug, board, info);
-
-            if(!success)
-                continue;
+            MoveFinder.doMove(zug, board, info);
 
             int nodes = perft(board, depth - 1, !isWhite);
             System.out.println(zug.processZug() + ": " + nodes);
@@ -72,10 +69,7 @@ public class PerftMoveGenTest {
         int count = 0;
         for (Zug zug : moves) {
             MoveInfo info = MoveFinder.saveMoveInfo(zug, board);
-            boolean success = MoveFinder.doMove(zug, board, info);
-
-            if(!success)
-                continue;
+            MoveFinder.doMove(zug, board, info);
 
             count += perft(board, depth - 1, !isWhite);
             MoveFinder.undoMove(zug, board, info);
