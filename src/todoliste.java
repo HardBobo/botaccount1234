@@ -5,6 +5,10 @@
 //transposition table sich alte positionen merken
 //hallo test
 
+//wichtig!!! qSearch verbuggt es werden beispielsweise Queenblunder angeschaut was ja eig richtig ist
+//und dann aber der wert der position nach dem queenblunder auf den gesamten zug übertragen was ja falsch ist
+//da man einfach den blunder nicht spielen muss
+
 
 
 public class todoliste {
