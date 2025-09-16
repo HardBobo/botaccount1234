@@ -166,6 +166,7 @@ public class Evaluation {
         int gamePhase = 0;
         for (int y = 0; y < 8; y++) {
             for (int x = 0; x < 8; x++) {
+                Koordinaten k = new Koordinaten(x,y);
                 Piece p = board[y][x];
                 if (p instanceof Empty) continue;
                 int pieceType = p.getType(); // 0..5
@@ -174,8 +175,8 @@ public class Evaluation {
                 // For black pieces, flip square index to reuse white tables
                 int tableIndex = (color == WHITE) ? sq : flip(sq);
                 // Material + positional values
-                mg[color] += mgValue[pieceType] + mgTables[pieceType][tableIndex];
-                eg[color] += egValue[pieceType] + egTables[pieceType][tableIndex];
+                mg[color] += mgValue[pieceType] + mgTables[pieceType][tableIndex] + evalForRelativScore(k, board,p.isWhite());
+                eg[color] += egValue[pieceType] + egTables[pieceType][tableIndex] + evalForRelativScore(k, board,p.isWhite());
                 // Increment game phase
                 gamePhase += gamePhaseInc[pieceCode(pieceType, color)];
             }
