@@ -206,33 +206,39 @@ public class Evaluation {
                 value = value + turm.moeglicheZuege(where.x, where.y, brett).size();
             }
             case Bauer bauer -> {
-                if (true && hasThisFileAnEnemyPawn(brett,isWhite, where.x) == false)
+                if (hasThisFileAnEnemyPawn(brett, isWhite, where.x) == 0)
                 {
-                    if(where.x == 0 && hasThisFileAnEnemyPawn(brett,isWhite, where.x+1) == false)
+                    if(where.x == 0 && hasThisFileAnEnemyPawn(brett,isWhite, where.x+1) == 0)
                     {
-                        value = value +10;
-                        if(hasThisFileAnEnemyPawn(brett,!isWhite, where.x+1) == true)
+                        value = value +50;
+                        if(hasThisFileAnEnemyPawn(brett,!isWhite, where.x+1) > 0)
                         {
                             value = value + 10;
                         }
                     }
-                    else if(where.x == 7 && hasThisFileAnEnemyPawn(brett,isWhite, where.x-1) == false)
+                    else if(where.x == 7 && hasThisFileAnEnemyPawn(brett,isWhite, where.x-1) == 0)
                     {
-                        value = value + 10;
-                        if(hasThisFileAnEnemyPawn(brett,!isWhite, where.x-1) == true)
+                        value = value + 50;
+                        if(hasThisFileAnEnemyPawn(brett,!isWhite, where.x-1) > 0)
                         {
                             value = value + 10;
                         }
                     }
-                    else if (hasThisFileAnEnemyPawn(brett,isWhite, where.x-1) == false && hasThisFileAnEnemyPawn(brett,isWhite, where.x+1) == false)
+                    else if (hasThisFileAnEnemyPawn(brett,isWhite, where.x-1) == 0 && hasThisFileAnEnemyPawn(brett,isWhite, where.x+1) == 0)
                     {
-                        value = value + 10;
-                        if(hasThisFileAnEnemyPawn(brett,!isWhite, where.x+1) == true||hasThisFileAnEnemyPawn(brett,!isWhite, where.x-1) == true)
+                        value = value + 50;
+                        if(hasThisFileAnEnemyPawn(brett,!isWhite, where.x+1) > 0||hasThisFileAnEnemyPawn(brett,!isWhite, where.x-1) > 0)
                         {
                             value = value + 10;
                         }
                     }
                 }
+
+                if (hasThisFileAnEnemyPawn(brett, !isWhite, where.x) > 1)
+                {
+                    value = value - 10;
+                }
+
             }
             case Koenig koenig -> {
                 value = 0;
@@ -247,15 +253,15 @@ public class Evaluation {
         return value;
     }
 
-    public static boolean hasThisFileAnEnemyPawn (Piece[][] brett, boolean isWhite, int file)
+    public static int hasThisFileAnEnemyPawn (Piece[][] brett, boolean isWhite, int file)
     {
-        boolean temp = false;
+        int temp = 0;
         Piece p;
         for (int i = 0; i < 8; i++) {
             p =  brett[i][file];
             if (p instanceof Bauer && p.isWhite() != isWhite)
             {
-                temp = true;
+                temp = temp +1;
             }
         }
         return temp;
