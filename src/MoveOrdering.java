@@ -1,6 +1,9 @@
 import java.util.ArrayList;
 
 public class MoveOrdering {
+
+    private static final int [] pieceValues = {100, 300, 310, 500, 900, 0};
+
     public MoveOrdering() {
 
     }
@@ -9,7 +12,7 @@ public class MoveOrdering {
         Piece movingPiece = board[zug.startY][zug.startX];
         Piece targetPiece;
         int richtung = board[zug.startY][zug.startX].isWhite() ? -1 : 1;
-        if(Spiel.enPassant(zug, board)) {
+        if(MoveFinder.enPassant(zug, board)) {
             targetPiece = board[zug.endY - richtung][zug.endX];
         } else {
             targetPiece = board[zug.endY][zug.endX];
@@ -17,24 +20,24 @@ public class MoveOrdering {
 
         // schlagen bonus krasser wenn arsch angreifer geiler verteidiger
         if (!(targetPiece instanceof Empty)) {
-            int victimValue = targetPiece.getValue();
-            int attackerValue = movingPiece.getValue();
+            int victimValue = pieceValues[targetPiece.getType()];
+            int attackerValue = pieceValues[movingPiece.getType()];
             score += 1000 + victimValue - attackerValue; // Schlagzüge priorisieren
         }
 
         // promotion krass
-        if (movingPiece instanceof Bauer && Spiel.promotion(zug, board)) {
+        if (movingPiece instanceof Bauer && MoveFinder.promotion(zug, board)) {
             score += 800;
         }
 
         // rochade bewerten, wenn king safety von eval erkannt
-        if (Spiel.rochade(zug, board)) {
+        if (MoveFinder.rochade(zug, board)) {
             score += 50;
 
         }
 
          //schachzug krasser
-         if (Spiel.inCheck(board, !isWhite)) {
+         if (MoveFinder.inCheck(board, !isWhite)) {
              score += 20;
          }
 

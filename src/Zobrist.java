@@ -77,29 +77,7 @@ public class Zobrist {
         }
 
         // En passant (falls vorhanden, -1 wenn keiner)
-        int enPassantFile = -1;
-
-        // Nur relevante rank: weiße Bauern auf 4, schwarze auf 3
-        int targetRank = whiteToMove ? 3 : 4;
-
-        for (int x = 0; x < 8; x++) {
-            Piece p = board[targetRank][x];
-            if (p instanceof Bauer b && b.isEnPassantPossible()) {
-                // Prüfe, ob dieser Bauer gerade zwei Felder gezogen sein könnte
-                // z.B. weißer Bauer auf rank 5 = y=3 für Hashberechnung
-                // Prüfe, ob Gegner auf adjacent file vorhanden ist
-                int adjLeft = x - 1;
-                int adjRight = x + 1;
-                boolean capturePossible = (adjLeft >= 0 && board[targetRank][adjLeft] instanceof Bauer &&
-                        board[targetRank][adjLeft].isWhite() != p.isWhite()) ||
-                        (adjRight <= 7 && board[targetRank][adjRight] instanceof Bauer &&
-                                board[targetRank][adjRight].isWhite() != p.isWhite());
-                if (capturePossible) {
-                    enPassantFile = x;
-                    break; // nur ein en passant File kann gleichzeitig gelten
-                }
-            }
-        }
+        int enPassantFile = getEnPassantFile(board, whiteToMove);
 
         if (enPassantFile >= 0) {
             hash ^= Zobrist.getEnPassantKey(enPassantFile);
@@ -107,6 +85,76 @@ public class Zobrist {
 
         return hash;
     }
+
+    public static long updateHash(
+            long hash,
+            Zug zug,
+            MoveInfo info,
+            Piece [][] board,
+            boolean[] castleRightsBefore,
+            boolean[] castleRightsAfter,
+            int enPassantFileBefore,
+            int enPassantFileAfter
+    ) {
+        int fromSq = zug.startY * 8 + zug.startX;
+        int toSq   = zug.endY * 8 + zug.endX;
+
+        Piece moving = info.movingPiece;
+        int movingIndex = getPieceIndex(moving);
+
+        if (!info.wasPromotion) {
+            // Figur vom Startfeld entfernen
+            hash ^= getPieceSquareKey(movingIndex, fromSq);
+            // Figur auf Zielfeld hinzufügen
+            hash ^= getPieceSquareKey(movingIndex, toSq);
+        } else {
+            hash ^= getPieceSquareKey(movingIndex, fromSq);
+            int promotionPieceIndex = getPieceIndex(info.promotionPiece);
+            hash ^= getPieceSquareKey(promotionPieceIndex, toSq);
+        }
+
+        if (info.rookMoved) {
+            Piece rook = board[zug.endY][info.rookEndX];
+            int rookIndex = getPieceIndex(rook);
+            int rToSq = zug.endY * 8 + info.rookEndX;
+            int rFromSq = zug.endY * 8 + info.rookStartX;
+            hash ^=  Zobrist.getPieceSquareKey(rookIndex, rFromSq);
+            hash ^=  Zobrist.getPieceSquareKey(rookIndex, rToSq);
+        }
+
+        // geschlagene Figur (falls vorhanden)
+        if (!(info.squareMovedOnto instanceof Empty)) {
+            if(!info.wasEnPassant) {
+                Piece captured = info.squareMovedOnto;
+                int capturedIndex = getPieceIndex(captured);
+                hash ^= getPieceSquareKey(capturedIndex, toSq);
+            } else {
+                Piece captured = info.capturedPiece;
+                int capturedIndex = getPieceIndex(captured);
+                int capSq = info.capEnPassantBauerCoords.y * 8 + info.capEnPassantBauerCoords.x;
+                hash ^= getPieceSquareKey(capturedIndex, capSq);
+            }
+        }
+
+        // Rochaderechte vor/nach
+        for (int i = 0; i < 4; i++) {
+            if (castleRightsBefore[i] != castleRightsAfter[i]) {
+                hash ^= castleKeys[i];
+            }
+        }
+
+        // En-Passant vor/nach
+        if (enPassantFileBefore != -1)
+            hash ^= enPassantKeys[enPassantFileBefore];
+        if (enPassantFileAfter != -1)
+            hash ^= enPassantKeys[enPassantFileAfter];
+
+        // Side to move
+        hash ^= sideToMoveKey;
+
+        return hash;
+    }
+
     private static int getPieceIndex(Piece p) {
         int base = p.isWhite() ? 0 : 6;
         return switch (p) {
@@ -118,5 +166,36 @@ public class Zobrist {
             case Koenig koenig -> base + 5;
             default -> throw new IllegalArgumentException("Unbekannte Figur: " + p);
         };
+    }
+
+    public static int getEnPassantFile(Piece[][] board, boolean whiteToMove) {
+        // -1 = kein En Passant möglich
+        int enPassantFile = -1;
+
+        // Nur relevanter Rank: weiße Bauern auf 4, schwarze auf 3
+        int targetRank = whiteToMove ? 3 : 4;
+
+        for (int x = 0; x < 8; x++) {
+            Piece p = board[targetRank][x];
+
+            if (p instanceof Bauer b && b.isEnPassantPossible()) {
+                // Prüfen, ob Gegner auf Nachbarfile steht
+                int adjLeft = x - 1;
+                int adjRight = x + 1;
+
+                boolean capturePossible =
+                        (adjLeft >= 0 && board[targetRank][adjLeft] instanceof Bauer &&
+                                board[targetRank][adjLeft].isWhite() != p.isWhite())
+                                || (adjRight <= 7 && board[targetRank][adjRight] instanceof Bauer &&
+                                board[targetRank][adjRight].isWhite() != p.isWhite());
+
+                if (capturePossible) {
+                    enPassantFile = x;
+                    break; // nur ein En-Passant-File gleichzeitig erlaubt
+                }
+            }
+        }
+
+        return enPassantFile;
     }
 }
