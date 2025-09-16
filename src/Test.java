@@ -5,19 +5,26 @@ public class Test {
 
     public static void main(String [] args){
         temp = new Piece[8][8];
-        temp = Board.fenToBoard("r1bq1rk1/ppp1bpp1/2n1p2p/3p4/2PPN2P/4P1B1/PP3PP1/R2QKBNR b KQ - 0 9");
+        temp = Board.fenToBoard("r1bq1rk1/p3bpp1/2p2p1p/3p4/Q2P4/2N1PN2/PP3PPP/R3K2R b KQ - 1 11");
 
         test1();
     }
     public static void test1(){
+//        MoveInfo info = MoveFinder.saveMoveInfo(new Zug("e7b4"), temp);
+//        MoveFinder.doMove(new Zug("e7b4"), temp, info);
+        System.out.println("Evaluation: " + Evaluation.evaluation(temp, true));
+
+
         // Startzeit für Messung
-        long startTime = System.currentTimeMillis();
+//        long startTime = System.currentTimeMillis();
 
-        ArrayList<Zug> pM = MoveFinder.possibleMoves(false, temp);
-        pM.removeIf(zug -> !MoveFinder.isLegalMove(zug, temp, false));
-        MoveOrdering.orderMoves(pM, temp, false);
+        boolean whiteToMove = false;
 
-        System.out.println(MoveFinder.findBestMoves(temp, 1, false, pM).getFirst().processZug());
+        ArrayList<Zug> pM = MoveFinder.possibleMoves(whiteToMove, temp);
+        pM.removeIf(zug -> !MoveFinder.isLegalMove(zug, temp, whiteToMove));
+        MoveOrdering.orderMoves(pM, temp, whiteToMove);
+
+        System.out.println(MoveFinder.findBestMoves(temp, 4, whiteToMove, pM).getFirst().processZug());
 //        MoveInfo info = MoveFinder.saveMoveInfo(new Zug("d4c3"), temp);
 //        MoveFinder.doMove(new Zug("d4c3"), temp, info);
 //

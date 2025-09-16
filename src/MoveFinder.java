@@ -5,6 +5,7 @@ public class MoveFinder {
     private static long startTime = 0; // Startzeit für Messung
 
     private static int evalDebug = 0;
+    private static String zugDebug = "";
 
 //    static final int EXACT = 0;
 //    static final int LOWERBOUND = 1;
@@ -46,7 +47,7 @@ public class MoveFinder {
             doMove(zug, board, info);
 
             // Negate score to get perspective of current player
-            int score = -negamax(board, depth-1, Integer.MIN_VALUE, Integer.MAX_VALUE, !isWhite);
+            int score = -negamax(board, depth-1, Integer.MIN_VALUE + 1, Integer.MAX_VALUE - 1, !isWhite);
 
             undoMove(zug, board, info);
 
@@ -108,7 +109,8 @@ public class MoveFinder {
 
         if (depth == 0){
             return qSearch(board, alpha, beta, isWhite);
-//            return Evaluation.evaluation(board, isWhite);
+//            evalDebug = Evaluation.evaluation(board, isWhite);
+//            return evalDebug;
         }
 
 
@@ -129,12 +131,15 @@ public class MoveFinder {
         int value = Integer.MIN_VALUE;
         for (Zug zug : pseudoLegalMoves){
 
+            zugDebug = zug.processZug();
+
             MoveInfo info = saveMoveInfo(zug, board);
 
             doMove(zug, board, info);
 
             value = Math.max(value, -negamax(board, depth - 1, -beta, -alpha, !isWhite ));
 
+            zugDebug = zug.processZug();
 
             undoMove(zug, board, info);
 
@@ -142,7 +147,7 @@ public class MoveFinder {
 
             if(alpha >= beta)
                 break; //alpha beta cutoff
-        }
+           }
 
 //        int flag;
 //        if (value <= alphaOrig) {
