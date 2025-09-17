@@ -1,6 +1,10 @@
 public class Board {
     public static Piece [][] brett = new Piece[8][8];
+    public static boolean whiteToMove = true;
+
+
     public static void setupBoard(Piece [][] board){
+        whiteToMove = true;
         boolean white = true;
         Piece p = new Empty();
         for (int i = 0; i < 8; i++) {
@@ -131,6 +135,9 @@ public class Board {
                 }
             }
         }
+
+        // --- Whos turn ---
+        whiteToMove = activeColor.equals("w");
 
         // --- Castling rights ---
         if (!castlingRights.equals("-")) {

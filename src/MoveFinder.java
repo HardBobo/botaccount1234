@@ -4,14 +4,13 @@ public class MoveFinder {
     private static long nodes = 0;     // Knoten-Zähler
     private static long startTime = 0; // Startzeit für Messung
 
-    private static int evalDebug = 0;
-    private static String zugDebug = "";
-
 //    static final int EXACT = 0;
 //    static final int LOWERBOUND = 1;
 //    static final int UPPERBOUND = 2;
 //
 //    static long currentHash = 0;
+
+    private static Stack<int[]> evalStack = new Stack<>();
 
     static Map<Long, TTEntry> transpositionTable = new HashMap<>();
     public MoveFinder(){
@@ -33,6 +32,8 @@ public class MoveFinder {
     public static ArrayList<Zug> findBestMoves(Piece[][] board, int depth, boolean isWhite, ArrayList<Zug> orderedMoves) {
         nodes = 0;
         startTime = System.currentTimeMillis();
+
+        evalStack.push(Evaluation.evaluation(board, isWhite));
 
         // Remove illegal moves
         orderedMoves.removeIf(zug -> !isLegalMove(zug, board, isWhite));
@@ -109,8 +110,8 @@ public class MoveFinder {
 
         if (depth == 0){
             return qSearch(board, alpha, beta, isWhite);
-//            evalDebug = Evaluation.evaluation(board, isWhite);
-//            return evalDebug;
+            //Evaluation.evaluation(board, isWhite);
+//            return ;
         }
 
 
@@ -131,15 +132,11 @@ public class MoveFinder {
         int value = Integer.MIN_VALUE;
         for (Zug zug : pseudoLegalMoves){
 
-            zugDebug = zug.processZug();
-
             MoveInfo info = saveMoveInfo(zug, board);
 
             doMove(zug, board, info);
 
             value = Math.max(value, -negamax(board, depth - 1, -beta, -alpha, !isWhite ));
-
-            zugDebug = zug.processZug();
 
             undoMove(zug, board, info);
 
@@ -165,9 +162,7 @@ public class MoveFinder {
 
     public static int qSearch(Piece [][] board, int alpha, int beta, boolean isWhite){
 
-        int best_value = Evaluation.evaluation(board, isWhite);
-
-        evalDebug = best_value;
+        int best_value = Evaluation.evaluation(board, isWhite)[0];
 
         if( best_value >= beta ) {
             return best_value;

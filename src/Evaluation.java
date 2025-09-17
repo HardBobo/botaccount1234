@@ -160,7 +160,112 @@ public class Evaluation {
         return 2 * pieceType + color;
     }
 
-    public static int evaluation(Piece[][] board, boolean isWhite) {
+    private static int squareCode(int x, int y){
+        return y * 8 +x;
+    }
+
+    public int [] updateEval(
+            Zug zug,
+            MoveInfo info,
+            int [] mg,
+            int [] eg,
+            boolean isWhite,
+            int gamePhase,
+            Piece [][] board
+    ) {
+        int newEval;
+
+        Piece movedPiece = info.movingPiece;
+        int movingType = movedPiece.getType();
+        int movedColor = isWhite ? WHITE : BLACK;
+
+        int fromSq = squareCode(zug.startX,zug.startY);
+        int toSq = squareCode(zug.endX,zug.endY);
+
+        int fromIndex = (movedColor == WHITE) ? fromSq : flip(fromSq);
+        int toIndex   = (movedColor == WHITE) ? toSq   : flip(toSq);
+
+
+        // 1. remove old piece contribution (positional value + piece value)
+        mg[movedColor] -= mgValue[movingType] + mgTables[movingType][fromIndex];
+        eg[movedColor] -= egValue[movingType] + egTables[movingType][fromIndex];
+        gamePhase      -= gamePhaseInc[pieceCode(movingType, movedColor)];
+
+        //2. update captured piece
+        if (MoveFinder.isCapture(board, zug)) {
+            int capColor = 0;
+            if (!MoveFinder.enPassant(zug, board)) {
+                Piece captured = info.squareMovedOnto;
+                int capType = captured.getType();
+                capColor = isWhite ? BLACK : WHITE;
+                int capSq = squareCode(zug.endX,zug.endY);
+                int capIndex = (capColor == WHITE) ? capSq : flip(capSq);
+
+                mg[capColor] -= mgValue[capType] + mgTables[capType][capIndex];
+                eg[capColor] -= egValue[capType] + egTables[capType][capIndex];
+                gamePhase    -= gamePhaseInc[pieceCode(capType, capColor)];
+            }
+
+            // en passant special case: captured pawn not on toSq
+            else {
+                Piece captured = info.capturedPiece;
+                int capType = captured.getType();
+                capColor = isWhite ? BLACK : WHITE;
+                int capSq = squareCode(zug.startX,zug.endY);
+                int capIndex = (capColor == WHITE) ? capSq : flip(capSq);
+
+                mg[capColor] -= mgValue[capType] + mgTables[capType][capIndex];
+                eg[capColor] -= egValue[capType] + egTables[capType][capIndex];
+                gamePhase    -= gamePhaseInc[pieceCode(capType, capColor)];
+            }
+        }
+
+        // 3. Promotion
+        if (MoveFinder.promotion(zug, board)) {
+            int promoType = zug.getPromotionType();
+
+            // Add promoted piece
+            mg[movedColor] += mgValue[promoType] + mgTables[promoType][toIndex];
+            eg[movedColor] += egValue[promoType] + egTables[promoType][toIndex];
+            gamePhase      += gamePhaseInc[pieceCode(promoType, movedColor)];
+        }
+        else {
+            // Normal move → add contribution on new square
+            mg[movedColor] += mgValue[movingType] + mgTables[movingType][toIndex];
+            eg[movedColor] += egValue[movingType] + egTables[movingType][toIndex];
+            gamePhase      += gamePhaseInc[pieceCode(movingType, movedColor)];
+        }
+
+        // 4. Castling (rook also moves)
+        if (info.rookMoved) {
+            int rookSqFrom = squareCode(info.rookStartX, zug.startY);
+            int rookSqTo   = squareCode(info.rookEndX, zug.startY);
+
+            int rookIndexFrom = isWhite ? rookSqFrom : flip(rookSqFrom);
+            int rookIndexTo   = isWhite ?  rookSqTo : flip(rookSqTo);
+
+            mg[movedColor] -= mgValue[3] + mgTables[3][rookIndexFrom];
+            eg[movedColor] -= egValue[3] + egTables[3][rookIndexFrom];
+
+            mg[movedColor] += mgValue[3] + mgTables[3][rookIndexTo];
+            eg[movedColor] += egValue[3] + egTables[3][rookIndexTo];
+        }
+
+        // 5. Clamp game phase like in your full eval
+        if (gamePhase > 24) gamePhase = 24;
+        int egPhase = 24 - gamePhase;
+
+        int side = isWhite ? WHITE : BLACK;
+        int other = isWhite ? BLACK : WHITE;
+        int mgScore = mg[side] - mg[other];
+        int egScore = eg[side] - eg[other];
+
+        newEval = (mgScore * gamePhase + egScore * egPhase) / 24;
+
+        return new int[]{newEval, mg[WHITE], mg[BLACK], eg[WHITE], eg[BLACK], gamePhase};
+    }
+
+    public static int [] evaluation(Piece[][] board, boolean isWhite) {
         int[] mg = new int[2]; // middlegame scores for white and black
         int[] eg = new int[2]; // endgame scores for white and black
         int gamePhase = 0;
@@ -175,8 +280,8 @@ public class Evaluation {
                 // For black pieces, flip square index to reuse white tables
                 int tableIndex = (color == WHITE) ? sq : flip(sq);
                 // Material + positional values
-                mg[color] += mgValue[pieceType] + mgTables[pieceType][tableIndex] + evalForRelativScore(k, board,p.isWhite());
-                eg[color] += egValue[pieceType] + egTables[pieceType][tableIndex] + evalForRelativScore(k, board,p.isWhite());
+                mg[color] += mgValue[pieceType] + mgTables[pieceType][tableIndex]; //+ evalForRelativScore(k, board,p.isWhite());
+                eg[color] += egValue[pieceType] + egTables[pieceType][tableIndex]; //+ evalForRelativScore(k, board,p.isWhite());
                 // Increment game phase
                 gamePhase += gamePhaseInc[pieceCode(pieceType, color)];
             }
@@ -188,7 +293,8 @@ public class Evaluation {
         int mgScore = mg[side] - mg[other];
         int egScore = eg[side] - eg[other];
         // evaluation based on weighted average of middlegame and endgame
-        return (mgScore * gamePhase + egScore * egPhase) / 24;
+        int eval =  (mgScore * gamePhase + egScore * egPhase) / 24;
+        return new int[]{eval, mg[WHITE], mg[BLACK], eg[WHITE], eg[BLACK], gamePhase};
     }
     public static int evalForRelativScore (Koordinaten where, Piece[][] brett, boolean isWhite)
     {

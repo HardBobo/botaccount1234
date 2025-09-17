@@ -41,4 +41,13 @@ public class Zug {
             s += promoteTo;
         return s;
     }
+    public int getPromotionType(){
+        return switch (promoteTo){
+                case('q') -> 4;
+                case('n') -> 1;
+                case('r') -> 3;
+                case('b') -> 2;
+            default -> throw new IllegalArgumentException("Invalid promotion type");
+        };
+    }
 }
