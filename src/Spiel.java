@@ -11,14 +11,8 @@ public class Spiel {
         return zielFigur instanceof Empty || zielFigur.isWhite() != white;
     }
     public static Koordinaten kingCoordinates(boolean white, Piece[][] board){
-        for(int i = 0; i < 8; i++){
-            for(int j = 0; j < 8; j++){
-                if(board[i][j] instanceof Koenig && board[i][j].isWhite() == white){
-                    return new Koordinaten(j, i);
-                }
-            }
-        }
-        return null;
+        // Use PieceTracker for efficient king lookup instead of scanning the entire board
+        return Board.pieceTracker.getKing(white);
     }
 
     public static boolean imBrett(int x, int y) {

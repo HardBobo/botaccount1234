@@ -1,3 +1,5 @@
+import java.util.List;
+
 public class Evaluation {
 
     // Color constants
@@ -269,23 +271,16 @@ public class Evaluation {
         int[] mg = new int[2]; // middlegame scores for white and black
         int[] eg = new int[2]; // endgame scores for white and black
         int gamePhase = 0;
-        for (int y = 0; y < 8; y++) {
-            for (int x = 0; x < 8; x++) {
-                Koordinaten k = new Koordinaten(x,y);
-                Piece p = board[y][x];
-                if (p instanceof Empty) continue;
-                int pieceType = p.getType(); // 0..5
-                int color = p.isWhite() ? WHITE : BLACK;
-                int sq = y * 8 + x;
-                // For black pieces, flip square index to reuse white tables
-                int tableIndex = (color == WHITE) ? sq : flip(sq);
-                // Material + positional values
-                mg[color] += mgValue[pieceType] + mgTables[pieceType][tableIndex]; //+ evalForRelativScore(k, board,p.isWhite());
-                eg[color] += egValue[pieceType] + egTables[pieceType][tableIndex]; //+ evalForRelativScore(k, board,p.isWhite());
-                // Increment game phase
-                gamePhase += gamePhaseInc[pieceCode(pieceType, color)];
-            }
-        }
+        
+        // Use PieceTracker for efficient evaluation instead of scanning the entire board
+        PieceTracker tracker = Board.pieceTracker;
+        
+        // Evaluate white pieces
+        gamePhase += evaluatePiecesForColor(tracker, board, true, mg, eg);
+        
+        // Evaluate black pieces
+        gamePhase += evaluatePiecesForColor(tracker, board, false, mg, eg);
+        
         if (gamePhase > 24) gamePhase = 24;
         int egPhase = 24 - gamePhase;
         int side = isWhite ? WHITE : BLACK;
@@ -295,6 +290,32 @@ public class Evaluation {
         // evaluation based on weighted average of middlegame and endgame
         int eval =  (mgScore * gamePhase + egScore * egPhase) / 24;
         return new int[]{eval, mg[WHITE], mg[BLACK], eg[WHITE], eg[BLACK], gamePhase};
+    }
+    
+    /**
+     * Evaluate all pieces for a given color using PieceTracker
+     */
+    private static int evaluatePiecesForColor(PieceTracker tracker, Piece[][] board, boolean white, int[] mg, int[] eg) {
+        int gamePhase = 0;
+        int color = white ? WHITE : BLACK;
+        
+        // Get all pieces for this color from tracker
+        List<Koordinaten> pieces = tracker.getAllPieces(white);
+        
+        for (Koordinaten pos : pieces) {
+            Piece p = board[pos.y][pos.x];
+            int pieceType = p.getType(); // 0..5
+            int sq = pos.y * 8 + pos.x;
+            // For black pieces, flip square index to reuse white tables
+            int tableIndex = (color == WHITE) ? sq : flip(sq);
+            // Material + positional values
+            mg[color] += mgValue[pieceType] + mgTables[pieceType][tableIndex];
+            eg[color] += egValue[pieceType] + egTables[pieceType][tableIndex];
+            // Increment game phase
+            gamePhase += gamePhaseInc[pieceCode(pieceType, color)];
+        }
+        
+        return gamePhase;
     }
     public static int evalForRelativScore (Koordinaten where, Piece[][] brett, boolean isWhite)
     {
@@ -361,30 +382,22 @@ public class Evaluation {
 
     public static int hasThisFileAnEnemyPawn (Piece[][] brett, boolean isWhite, int file)
     {
-        int temp = 0;
-        Piece p;
-        for (int i = 0; i < 8; i++) {
-            p =  brett[i][file];
-            if (p instanceof Bauer && p.isWhite() != isWhite)
-            {
-                temp = temp +1;
-            }
-        }
-        return temp;
-    }
-    public static int bauerCounter (Piece[][] brett, boolean isWhite)
-    {
+        // Use PieceTracker to check enemy pawns on file efficiently
+        PieceTracker tracker = Board.pieceTracker;
+        List<Koordinaten> enemyPawns = tracker.getPawns(!isWhite);
+        
         int count = 0;
-        Piece p;
-        for (int x = 0; x < 8; x++) {
-            for (int y = 0; y < 8; y++) {
-                p = brett[x][y];
-                if (p instanceof Bauer)
-                {
-                    count++;
-                }
+        for (Koordinaten pos : enemyPawns) {
+            if (pos.x == file) {
+                count++;
             }
         }
         return count;
+    }
+    public static int bauerCounter (Piece[][] brett, boolean isWhite)
+    {
+        // Use PieceTracker to get pawn count efficiently
+        PieceTracker tracker = Board.pieceTracker;
+        return tracker.getPawns(true).size() + tracker.getPawns(false).size();
     }
 }

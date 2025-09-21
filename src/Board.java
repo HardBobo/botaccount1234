@@ -1,6 +1,7 @@
 public class Board {
     public static Piece [][] brett = new Piece[8][8];
     public static boolean whiteToMove = true;
+    public static PieceTracker pieceTracker = new PieceTracker();
 
 
     public static void setupBoard(Piece [][] board){
@@ -41,6 +42,9 @@ public class Board {
         for(int i = 0; i < 8; i++){
             board[1][i] = new Bauer(false);
         }
+        
+        // Initialize piece tracker after setting up the board
+        pieceTracker.initializeFromBoard(board);
     }
     public static Piece[][] copy(Piece [][] board) {
         Piece[][] kopie = new Piece[8][8];
@@ -182,6 +186,9 @@ public class Board {
             }
         }
 
+        // Initialize piece tracker after parsing FEN
+        pieceTracker.initializeFromBoard(board);
+        
         return board;
     }
 

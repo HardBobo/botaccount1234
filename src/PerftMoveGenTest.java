@@ -5,16 +5,17 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
 public class PerftMoveGenTest {
-        static Piece [][] temp;
     private static long startTime = 0;
     public static void main(String[] args) throws NoSuchAlgorithmException {
-        temp = new Piece[8][8];
-//        Board.setupBoard(temp);
-        temp = Board.fenToBoard("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - ");
-//        MoveFinder.doMove(new Zug("d5e6"), temp);
-//        MoveFinder.doMove(new Zug("e8g8"), temp);
-//        MoveFinder.doMove(new Zug("e6d7"), temp);
-        perftDivide(temp, 5, true); // Will show all root moves and their node counts
+        // Use Board.brett directly so PieceTracker works properly
+        Board.brett = Board.fenToBoard("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - ");
+        
+        System.out.println("Running Perft test with PieceTracker optimization...");
+        System.out.println("White pieces tracked: " + Board.pieceTracker.getAllPieces(true).size());
+        System.out.println("Black pieces tracked: " + Board.pieceTracker.getAllPieces(false).size());
+        System.out.println();
+        
+        perftDivide(Board.brett, 5, true); // Will show all root moves and their node counts
     }
 
     public static void perftDivide(Piece [][] board, int depth, boolean isWhite) throws NoSuchAlgorithmException {
@@ -29,17 +30,7 @@ public class PerftMoveGenTest {
         int total = 0;
         for (Zug zug : moves) {
             MoveInfo info = MoveFinder.saveMoveInfo(zug, board);
-            String text = Board.boardToString(board, isWhite);
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-
-            // Bytes vom String holen und durch den Hasher jagen
-            byte[] hashBytes = md.digest(text.getBytes());
-
-            // in Hex-String umwandeln
-            String hashHex = HexFormat.of().formatHex(hashBytes);
-
-            System.out.println("Hash: " + hashHex);
-
+            
             MoveFinder.doMove(zug, board, info);
 
             int nodes = perft(board, depth - 1, !isWhite);

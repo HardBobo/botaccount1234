@@ -17,16 +17,8 @@ public class MoveFinder {
 
     }
     public static ArrayList<Zug> possibleMoves(boolean white, Piece[][] board) {
-        ArrayList<Zug> pM = new ArrayList<>();
-        for (int y = 0; y < 8; y++) {
-            for (int x = 0; x < 8; x++) {
-                Piece piece = board[y][x];
-                if (!(piece instanceof Empty) && piece.isWhite() == white) {
-                    pM.addAll(piece.moeglicheZuege(x, y, board));
-                }
-            }
-        }
-        return pM;
+        // Use PieceTracker for efficient move generation instead of scanning the entire board
+        return Board.pieceTracker.generateMoves(white, board);
     }
 
     public static ArrayList<Zug> findBestMoves(Piece[][] board, int depth, boolean isWhite, ArrayList<Zug> orderedMoves) {
@@ -260,6 +252,9 @@ public class MoveFinder {
 //
 //        currentHash = Zobrist.updateHash(currentHash, zug, info, board, castleRightsBefore, castleRightsAfter, epBefore, epAfter);
 
+        // Update piece tracker
+        Board.pieceTracker.updateMove(zug, info, board);
+        
         return true;
     }
     public static MoveInfo saveMoveInfo(Zug zug, Piece[][] board) {
@@ -347,6 +342,9 @@ public class MoveFinder {
         }
 
 //        currentHash = info.oldHash;
+        
+        // Update piece tracker for undo
+        Board.pieceTracker.undoMove(zug, info, board);
     }
 
     public static Zug iterativeDeepening (Piece[][] board, boolean isWhite){
