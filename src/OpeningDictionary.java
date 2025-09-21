@@ -3,9 +3,10 @@ import java.util.List;
 import java.util.Random;
 import java.io.*;
 public class OpeningDictionary {
-    private static final File openingData = new File("C:\\Users\\Anwender\\IdeaProjects\\botaccount1234\\openingdatabank\\gm_games5moves.txt");
+    private static final Config config = Config.getInstance();
     public static List<String> openings;
     public static void readData() throws IOException {
+        File openingData = new File(config.getOpeningDatabasePath());
         BufferedReader reader = new BufferedReader(new FileReader(openingData));
         String line;
         openings = new ArrayList<>();

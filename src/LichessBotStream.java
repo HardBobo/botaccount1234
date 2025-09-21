@@ -9,7 +9,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 public class LichessBotStream {
-    private static final String TOKEN = "lip_rB8r5GZFsYlOr3sBcXcc"; //api token
+    private static final Config config = Config.getInstance();
     private static boolean isWhite = true; //sind wir weiß?
     private static final HttpClient client = HttpClient.newHttpClient(); //http request
     static String [] moveList; //alle biherigen Züge
@@ -20,11 +20,14 @@ public class LichessBotStream {
     private static Piece [][] temp;
 
     public static void main(String[] args) throws IOException, InterruptedException {
+        // Validate configuration before starting
+        config.validateConfiguration();
+        
         HttpClient client = HttpClient.newHttpClient();
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("https://lichess.org/api/stream/event"))
-                .header("Authorization", "Bearer " + TOKEN)
+                .header("Authorization", "Bearer " + config.getLichessToken())
                 .build();
 
         CompletableFuture<Void> future = client.sendAsync(request, HttpResponse.BodyHandlers.ofLines())
@@ -68,7 +71,7 @@ public class LichessBotStream {
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("https://lichess.org/api/challenge/" + challengeId + "/accept"))
-                .header("Authorization", "Bearer " + TOKEN)
+                .header("Authorization", "Bearer " + config.getLichessToken())
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .build();
 
@@ -80,7 +83,7 @@ public class LichessBotStream {
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("https://lichess.org/api/bot/game/stream/" + gameId))
-                .header("Authorization", "Bearer " + TOKEN)
+                .header("Authorization", "Bearer " + config.getLichessToken())
                 .GET()
                 .build();
 
@@ -172,7 +175,7 @@ public class LichessBotStream {
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
-                .header("Authorization", "Bearer " + TOKEN)
+                .header("Authorization", "Bearer " + config.getLichessToken())
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .build();
 
