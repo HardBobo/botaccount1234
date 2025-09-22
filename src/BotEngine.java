@@ -14,12 +14,13 @@ public class BotEngine {
     public void makeMove(String move){
         Zug zug = new Zug(move);
         MoveInfo info = MoveFinder.saveMoveInfo(zug, Board.brett);
-        MoveFinder.doMove(zug, Board.brett, info);
+//        MoveFinder.doMove(zug, Board.brett, info);
         whiteToMove = !whiteToMove;
     }
 
     public String bestMove(boolean whiteToMove){
-        return MoveFinder.iterativeDeepening(Board.brett, whiteToMove).processZug();
+//        return MoveFinder.iterativeDeepening(Board.brett, whiteToMove).processZug();
+        return "a";
     }
 
     public void setSideToMove(boolean isWhite){

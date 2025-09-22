@@ -1,10 +1,10 @@
 import java.util.Random;
 
 public class Zobrist {
-    private static long[][] pieceSquareKeys;
-    private static long sideToMoveKey;
-    private static long[] castleKeys;
-    private static long[] enPassantKeys;
+    public static long[][] pieceSquareKeys;
+    public static long sideToMoveKey;
+    public static long[] castleKeys;
+    public static long[] enPassantKeys;
 
     public static void initZobrist() {
         Random random = new Random(239847502); // fester Seed, damit gleiche Zufallszahlen bei jedem Start
@@ -113,6 +113,8 @@ public class Zobrist {
             hash ^= getPieceSquareKey(promotionPieceIndex, toSq);
         }
 
+//        System.out.println("Hash nach bewegen der Figur: " + hash);
+
         if (info.rookMoved) {
             Piece rook = board[zug.endY][info.rookEndX];
             int rookIndex = getPieceIndex(rook);
@@ -122,19 +124,24 @@ public class Zobrist {
             hash ^=  Zobrist.getPieceSquareKey(rookIndex, rToSq);
         }
 
+//        System.out.println("Hash nach Rochade: " + hash);
+
         // geschlagene Figur (falls vorhanden)
         if (!(info.squareMovedOnto instanceof Empty)) {
-            if(!info.wasEnPassant) {
-                Piece captured = info.squareMovedOnto;
-                int capturedIndex = getPieceIndex(captured);
-                hash ^= getPieceSquareKey(capturedIndex, toSq);
-            } else {
+            Piece captured = info.squareMovedOnto;
+            int capturedIndex = getPieceIndex(captured);
+            hash ^= getPieceSquareKey(capturedIndex, toSq);
+        } else {
+            if(info.wasEnPassant) {
                 Piece captured = info.capturedPiece;
                 int capturedIndex = getPieceIndex(captured);
                 int capSq = info.capEnPassantBauerCoords.y * 8 + info.capEnPassantBauerCoords.x;
                 hash ^= getPieceSquareKey(capturedIndex, capSq);
             }
         }
+
+
+//        System.out.println("Hash nach geschlagener Figur: " + hash);
 
         // Rochaderechte vor/nach
         for (int i = 0; i < 4; i++) {
@@ -143,19 +150,25 @@ public class Zobrist {
             }
         }
 
+//        System.out.println("Hash nach RochaderechteUpdate Figur: " + hash);
+
         // En-Passant vor/nach
         if (enPassantFileBefore != -1)
             hash ^= enPassantKeys[enPassantFileBefore];
         if (enPassantFileAfter != -1)
             hash ^= enPassantKeys[enPassantFileAfter];
 
+//        System.out.println("Hash nach EnPassantUpdate: " + hash);
+
         // Side to move
         hash ^= sideToMoveKey;
+
+//        System.out.println("Hash nach SideToMoveKey: " + hash);
 
         return hash;
     }
 
-    private static int getPieceIndex(Piece p) {
+    public static int getPieceIndex(Piece p) {
         int base = p.isWhite() ? 0 : 6;
         return switch (p) {
             case Bauer bauer -> base;
@@ -184,10 +197,10 @@ public class Zobrist {
                 int adjRight = x + 1;
 
                 boolean capturePossible =
-                        (adjLeft >= 0 && board[targetRank][adjLeft] instanceof Bauer &&
-                                board[targetRank][adjLeft].isWhite() != p.isWhite())
-                                || (adjRight <= 7 && board[targetRank][adjRight] instanceof Bauer &&
-                                board[targetRank][adjRight].isWhite() != p.isWhite());
+                        (adjLeft >= 0 && board[targetRank][adjLeft] instanceof Bauer b2 &&
+                                b2.isWhite() != p.isWhite())
+                                || (adjRight <= 7 && board[targetRank][adjRight] instanceof Bauer b3 &&
+                                b3.isWhite() != p.isWhite());
 
                 if (capturePossible) {
                     enPassantFile = x;

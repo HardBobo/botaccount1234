@@ -7,6 +7,7 @@ public class UCIWrapper {
     static String moves;
     static int moveCount;
     private static int lastProcessedMoveCount = 0;
+    public static long startHash;
 
     public static void main(String[] args) {
         Scanner in = new Scanner(System.in);
@@ -25,6 +26,7 @@ public class UCIWrapper {
             else if (command.startsWith("ucinewgame")) {
                 engine.newGame();
                 lastProcessedMoveCount = 0; // reset history
+
             }
             else if (command.startsWith("position")) {
                 // reset game if startpos

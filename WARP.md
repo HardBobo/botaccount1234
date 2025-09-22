@@ -78,8 +78,6 @@ java -cp "out:path/to/json-20240303.jar" OpeningDictionary
 **Configuration & Utilities**
 - `Config.java`: Configuration management for API tokens and file paths
 - `MoveOrdering.java`: Move ordering for alpha-beta optimization  
-- `GmGame.java`: Grandmaster game processing
-- `DatabankReader.java` / `DatabankTrimmer.java`: Opening database management
 
 ### Key Architecture Patterns
 

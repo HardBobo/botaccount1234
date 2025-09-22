@@ -17,7 +17,7 @@ public class LichessBotStream {
     static int moveCount; //um herauszufinden, wer dran ist
     private static int lastProcessedMoveCount = 0; //für gui update und game state update
     static Spiel spiel = new Spiel();
-    private static Piece [][] temp;
+    public static long startHash;
 
     public static void main(String[] args) throws IOException, InterruptedException {
         // Validate configuration before starting
@@ -104,10 +104,16 @@ public class LichessBotStream {
                                     // mit status mate stalemate resign draw oder outoftime | angebot zu unentschieden wird immer ignoriert
                                 }
                                 else if ("gameFull".equals(type)) { // erster state nach gamestart
-//                                    Zobrist.initZobrist();
-//                                    MoveFinder.currentHash = Zobrist.computeHash(Board.brett, isWhite);
-                                    if(isWhite)
-                                        playMove(gameId, Objects.requireNonNull(OpeningDictionary.getNextOpeningMove("")).processZug());
+                                    MoveFinder.transpositionTable.clear();
+                                    Zobrist.initZobrist();
+                                    startHash = Zobrist.computeHash(Board.brett, isWhite);
+                                    if(isWhite) {
+                                        Zug zug = Objects.requireNonNull(OpeningDictionary.getNextOpeningMove(""));
+                                        playMove(gameId, zug.processZug());
+                                        MoveInfo info = MoveFinder.saveMoveInfo(zug, Board.brett);
+                                        startHash = MoveFinder.doMove(zug, Board.brett, info, startHash);
+                                        lastProcessedMoveCount++;
+                                    }
                                 } else if ("gameState".equals(type)) { // normaler gamestate
                                     if(event.getString("status").equals("mate")
                                             || event.getString("status").equals("stalemate")
@@ -132,7 +138,7 @@ public class LichessBotStream {
                                                 //System.out.println("Neuer Zug erkannt: " + moveList[i]);
                                                 zug = new Zug(moveList[i]);
                                                 MoveInfo info = MoveFinder.saveMoveInfo(zug, Board.brett);
-                                                MoveFinder.doMove(new Zug(moveList[i]), Board.brett, info);
+                                                startHash = MoveFinder.doMove(new Zug(moveList[i]), Board.brett, info, startHash);
                                             }
                                             lastProcessedMoveCount = moveList.length;
                                         }
@@ -140,22 +146,20 @@ public class LichessBotStream {
                                             if (isMyTurn(moves, "white")) {
                                                 Zug zug = OpeningDictionary.getNextOpeningMove(moves);
                                                 if(zug != null){
-                                                    playMove(gameId, Objects.requireNonNull(OpeningDictionary.getNextOpeningMove(moves)).processZug());
+                                                    playMove(gameId, zug.processZug());
                                                 }
                                                 else {
-                                                    temp = Board.copy(Board.brett);
-                                                    playMove(gameId, MoveFinder.iterativeDeepening(temp,true).processZug());
+                                                    playMove(gameId, MoveFinder.iterativeDeepening(Board.brett,true, startHash).processZug());
                                                 }
                                             }
                                         } else {
                                             if (isMyTurn(moves, "black")) {
                                                 Zug zug = OpeningDictionary.getNextOpeningMove(moves);
                                                 if(zug != null){
-                                                    playMove(gameId, Objects.requireNonNull(OpeningDictionary.getNextOpeningMove(moves)).processZug());
+                                                    playMove(gameId, zug.processZug());
                                                 }
                                                 else {
-                                                    temp = Board.copy(Board.brett);
-                                                    playMove(gameId, MoveFinder.iterativeDeepening(temp, false).processZug());
+                                                    playMove(gameId, MoveFinder.iterativeDeepening(Board.brett, false, startHash).processZug());
                                                 }
                                             }
                                         }
@@ -182,7 +186,7 @@ public class LichessBotStream {
         client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .thenAccept(response -> {
                     if (response.statusCode() == 200) {
-                        //System.out.println("Zug gesendet: " + move);
+                        System.out.println("Zug gesendet: " + move);
                     } else {
                         System.err.println("Fehler beim Zug: " + response.statusCode());
                         System.err.println(response.body());
