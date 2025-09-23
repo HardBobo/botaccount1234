@@ -10,6 +10,12 @@ public class UCIWrapper {
     public static long startHash;
     private static boolean baseWhiteToMove = true; // side to move at start of current position
 
+    // UCI time controls (milliseconds)
+    private static long wtimeMs = -1;
+    private static long btimeMs = -1;
+    private static long wincMs = 0;
+    private static long bincMs = 0;
+
     public static void main(String[] args) {
         // Initial engine state similar to LichessBotStream game start
         Board.setupBoard(Board.brett);
@@ -96,6 +102,28 @@ public class UCIWrapper {
                 }
             }
             else if (command.startsWith("go")) {
+                // Parse UCI time parameters (milliseconds)
+                String[] parts = command.split("\\s+");
+                for (int i = 1; i < parts.length; i++) {
+                    switch (parts[i]) {
+                        case "wtime":
+                            if (i + 1 < parts.length) { try { wtimeMs = Long.parseLong(parts[++i]); } catch (NumberFormatException ignored) {} }
+                            break;
+                        case "btime":
+                            if (i + 1 < parts.length) { try { btimeMs = Long.parseLong(parts[++i]); } catch (NumberFormatException ignored) {} }
+                            break;
+                        case "winc":
+                            if (i + 1 < parts.length) { try { wincMs = Long.parseLong(parts[++i]); } catch (NumberFormatException ignored) {} }
+                            break;
+                        case "binc":
+                            if (i + 1 < parts.length) { try { bincMs = Long.parseLong(parts[++i]); } catch (NumberFormatException ignored) {} }
+                            break;
+                        default:
+                            // ignore other go params for now
+                            break;
+                    }
+                }
+
                 // Determine side to move: start side flipped by number of moves applied
                 boolean whiteToMove = (moveCount % 2 == 0) ? baseWhiteToMove : !baseWhiteToMove;
 
@@ -105,12 +133,25 @@ public class UCIWrapper {
                     if (opening != null) {
                         System.out.println("bestmove " + opening.processZug());
                     } else {
-                        Zug best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash);
+                        long timeLeft = whiteToMove ? wtimeMs : btimeMs;
+                        long inc = whiteToMove ? wincMs : bincMs;
+                        long thinkMs = TimeManager.computeThinkTimeMs(Board.brett, whiteToMove, timeLeft, inc, moveCount);
+                        Zug best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash, thinkMs);
+                        if (best == null) {
+                            // Fallback if no move found (should not happen)
+                            best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash);
+                        }
                         System.out.println("bestmove " + best.processZug());
                     }
                 } catch (IOException e) {
-                    // If opening book unavailable, fall back to search
-                    Zug best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash);
+                    // If opening book unavailable, fall back to timed search
+                    long timeLeft = whiteToMove ? wtimeMs : btimeMs;
+                    long inc = whiteToMove ? wincMs : bincMs;
+                    long thinkMs = TimeManager.computeThinkTimeMs(Board.brett, whiteToMove, timeLeft, inc, moveCount);
+                    Zug best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash, thinkMs);
+                    if (best == null) {
+                        best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash);
+                    }
                     System.out.println("bestmove " + best.processZug());
                 }
             }

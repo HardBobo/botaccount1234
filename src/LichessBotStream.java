@@ -18,6 +18,17 @@ public class LichessBotStream {
     private static int lastProcessedMoveCount = 0; //für gui update und game state update
     public static long startHash;
 
+    // Zeitkontrolle (Basiszeit in Sekunden und Inkrement in Sekunden)
+    private static int baseTimeSeconds = -1;
+    private static int incrementSeconds = 0;
+    // Zwischenspeicher aus Challenge-Event, falls Game-Stream keine Clock liefert
+    private static Integer pendingBaseTimeSeconds = null;
+    private static Integer pendingIncrementSeconds = null;
+
+    // Verbleibende Zeiten (Millisekunden) – aktualisiert pro Zug aus dem Game-Stream
+    private static long whiteTimeMs = -1;
+    private static long blackTimeMs = -1;
+
     public static void main(String[] args) throws IOException, InterruptedException {
         // Validate configuration before starting
         config.validateConfiguration();
@@ -50,16 +61,46 @@ public class LichessBotStream {
                             }
                         }
                         System.out.println("Gefundener Typ: " + type);
-                        if ("challenge".equals(type)) { //challenge gefunden → automatisch annehmen
-                            //System.out.println("Challenge erhalten");
-                            JSONObject challenge = obj.getJSONObject("challenge"); // challengeid auslesen
-                            String challengeId = challenge.getString("id");
-                            //System.out.println("Challenge-ID: " + challengeId);
-                            acceptChallenge(challengeId);
+if ("challenge".equals(type)) { //challenge gefunden → automatisch annehmen
+                            // Zeitkontrolle aus Challenge extrahieren (falls vorhanden)
+                            try {
+                                JSONObject challenge = obj.getJSONObject("challenge"); // challengeid auslesen
+                                if (challenge.has("timeControl")) {
+                                    JSONObject tc = challenge.getJSONObject("timeControl");
+                                    // limit ist Basiszeit in Sekunden, increment in Sekunden
+                                    pendingBaseTimeSeconds = tc.optInt("limit", -1);
+                                    pendingIncrementSeconds = tc.optInt("increment", 0);
+                                    System.out.println("[TC] Challenge TimeControl: base=" + pendingBaseTimeSeconds + "s, inc=" + pendingIncrementSeconds + "s");
+                                }
+                                String challengeId = challenge.getString("id");
+                                acceptChallenge(challengeId);
+                            } catch (Exception e) {
+                                System.err.println("Fehler beim Lesen der Zeitkontrolle aus Challenge: " + e.getMessage());
+                            }
                         }
-                        if("gameStart".equals(type)) { //wenn spielstart in gamestream übergehen
+if("gameStart".equals(type)) { //wenn spielstart in gamestream übergehen
                             isWhite = obj.getJSONObject("game").getString("color").equals("white"); // welche farbe bin ich
                             String gameId = obj.getJSONObject("game").getString("gameId");// gameid auslesen
+                            // Falls vorher aus Challenge bekannt, übernehme Zeitkontrolle schon jetzt
+                            if (pendingBaseTimeSeconds != null) {
+                                baseTimeSeconds = pendingBaseTimeSeconds;
+                                incrementSeconds = pendingIncrementSeconds != null ? pendingIncrementSeconds : 0;
+                                System.out.println("[TC] Set from pending (challenge): base=" + baseTimeSeconds + "s, inc=" + incrementSeconds + "s");
+                            } else {
+                                // Korrenspondenz/Unbekannt -> erstmal -1/0, wird ggf. im Game-Stream (gameFull) überschrieben
+                                baseTimeSeconds = -1;
+                                incrementSeconds = 0;
+                            }
+                            // secondsLeft im gameStart (in Sekunden) für unsere Seite, wenn vorhanden
+                            try {
+                                if (obj.getJSONObject("game").has("secondsLeft")) {
+                                    int secLeft = obj.getJSONObject("game").getInt("secondsLeft");
+                                    if (isWhite) whiteTimeMs = secLeft * 1000L; else blackTimeMs = secLeft * 1000L;
+                                    System.out.println("[TC] secondsLeft on start: " + secLeft + "s for " + (isWhite ? "white" : "black"));
+                                }
+                            } catch (Exception e) {
+                                // ignore
+                            }
                             startGameStream(gameId);
                         }
                     });
@@ -102,7 +143,27 @@ public class LichessBotStream {
                                 if ("gameFinish".equals(type)) { // gamefinish ist kein echter state der letzte echte state ist gamestate
                                     // mit status mate stalemate resign draw oder outoftime | angebot zu unentschieden wird immer ignoriert
                                 }
-                                else if ("gameFull".equals(type)) { // erster state nach gamestart
+else if ("gameFull".equals(type)) { // erster state nach gamestart
+                                    // Zeitkontrolle aus gameFull lesen, falls vorhanden
+                                    try {
+                                        if (event.has("clock")) {
+                                            JSONObject clock = event.getJSONObject("clock");
+                                            // Lichess liefert hier i.d.R. Sekundenwerte
+                                            baseTimeSeconds = clock.optInt("initial", baseTimeSeconds);
+                                            incrementSeconds = clock.optInt("increment", incrementSeconds);
+                                            System.out.println("[TC] GameFull TimeControl: base=" + baseTimeSeconds + "s, inc=" + incrementSeconds + "s");
+                                        }
+                                        // Aktuelle Zeiten aus dem state (Millisekunden)
+                                        if (event.has("state")) {
+                                            JSONObject state = event.getJSONObject("state");
+                                            whiteTimeMs = state.optLong("wtime", whiteTimeMs);
+                                            blackTimeMs = state.optLong("btime", blackTimeMs);
+                                            System.out.println("[TC] GameFull State Times: wtime=" + whiteTimeMs + "ms, btime=" + blackTimeMs + "ms");
+                                        }
+                                    } catch (Exception e) {
+                                        System.err.println("Fehler beim Lesen der Zeitkontrolle aus gameFull: " + e.getMessage());
+                                    }
+
                                     Board.setupBoard(Board.brett);
                                     MoveFinder.transpositionTable.clear();
                                     Zobrist.initZobrist();
@@ -115,6 +176,12 @@ public class LichessBotStream {
                                         lastProcessedMoveCount++;
                                     }
                                 } else if ("gameState".equals(type)) { // normaler gamestate
+                                    // Zeit pro Zug (Millisekunden) aus gameState
+                                    try {
+                                        if (event.has("wtime")) whiteTimeMs = event.getLong("wtime");
+                                        if (event.has("btime")) blackTimeMs = event.getLong("btime");
+                                    } catch (Exception ignored) {}
+
                                     if(event.getString("status").equals("mate")
                                             || event.getString("status").equals("stalemate")
                                             || event.getString("status").equals("resign")
@@ -126,6 +193,14 @@ public class LichessBotStream {
                                         lastProcessedMoveCount = 0;
                                         moves = "";
                                         moveList = new String [0];
+                                        // Zeitkontrolle & Zeiten zurücksetzen
+                                        baseTimeSeconds = -1;
+                                        incrementSeconds = 0;
+                                        pendingBaseTimeSeconds = null;
+                                        pendingIncrementSeconds = null;
+                                        whiteTimeMs = -1;
+                                        blackTimeMs = -1;
+
                                         Board.setupBoard(Board.brett);
                                         MoveFinder.transpositionTable.clear();
                                         Zobrist.initZobrist();
@@ -203,5 +278,22 @@ public class LichessBotStream {
         int moveCount = moves.split(" ").length;
         return ("white".equals(myColor) && moveCount % 2 == 0)
                 || ("black".equals(myColor) && moveCount % 2 == 1);
+    }
+
+    // Getter für Zeitkontrolle
+    public static int getBaseTimeSeconds() {
+        return baseTimeSeconds;
+    }
+
+    public static int getIncrementSeconds() {
+        return incrementSeconds;
+    }
+
+    // Getter für verbleibende Zeiten in Millisekunden
+    public static long getWhiteTimeMs() {
+        return whiteTimeMs;
+    }
+    public static long getBlackTimeMs() {
+        return blackTimeMs;
     }
 }

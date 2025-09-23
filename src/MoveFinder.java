@@ -4,6 +4,10 @@ public class MoveFinder {
     private static long nodes = 0;     // Knoten-Zähler
     private static long startTime = 0; // Startzeit für Messung
 
+    // Time control for search
+    private static volatile long searchEndTimeMs = Long.MAX_VALUE;
+    private static volatile boolean timeUp = false;
+
     static final int EXACT = 0;
     static final int LOWERBOUND = 1;
     static final int UPPERBOUND = 2;
@@ -21,6 +25,7 @@ public class MoveFinder {
     public static ArrayList<Zug> findBestMoves(Piece[][] board, int depth, boolean isWhite, ArrayList<Zug> orderedMoves, long hash) {
         nodes = 0;
         startTime = System.currentTimeMillis();
+        if (System.currentTimeMillis() >= searchEndTimeMs) { timeUp = true; return orderedMoves; }
 
         // Remove illegal moves
         orderedMoves.removeIf(zug -> !isLegalMove(zug, board, isWhite));
@@ -86,6 +91,11 @@ public class MoveFinder {
 
 
     public static int negamax(Piece [][] board, int depth, int alpha, int beta, boolean isWhite, long hash) {
+
+        if (System.currentTimeMillis() >= searchEndTimeMs) {
+            timeUp = true;
+            return 100;
+        }
 
         nodes++;
         ttLookups++;
@@ -164,6 +174,10 @@ public class MoveFinder {
     }
 
     public static int qSearch(Piece [][] board, int alpha, int beta, boolean isWhite, long hash){
+        if (System.currentTimeMillis() >= searchEndTimeMs) {
+            timeUp = true;
+            return 100;
+        }
         nodes++;
         ttLookups++;
 
@@ -405,13 +419,20 @@ public class MoveFinder {
     }
 
     public static Zug iterativeDeepening (Piece[][] board, boolean isWhite, long hash){
+        // Default: fixed small depth for compatibility
+        setSearchDeadline(Long.MAX_VALUE);
         ArrayList<Zug> order = possibleMoves(isWhite, board);
+        if (order.isEmpty()) return null;
+
+        Zug bestSoFar = order.getFirst();
 
         for(int i = 1; i<6; i++) {
+            if (System.currentTimeMillis() >= searchEndTimeMs) break;
             System.out.println("Tiefe: " + i);
 
             order = (findBestMoves(board, i, isWhite,order, hash));
-            System.out.println("Bester Zug bisher: " + order.getFirst().processZug());
+            if (!order.isEmpty()) bestSoFar = order.getFirst();
+            System.out.println("Bester Zug bisher: " + bestSoFar.processZug());
 
             double ttHitRatio = ttLookups == 0 ? 0
                     : 100.0 * ttHits / ttLookups;
@@ -422,12 +443,44 @@ public class MoveFinder {
                     ttHits,
                     ttLookups);
 
-// Reset for the next depth
+            // Reset for the next depth
             ttHits = 0;
             ttLookups = 0;
         }
 
-        return order.getFirst();
+        return bestSoFar;
+    }
+
+    // Time-limited iterative deepening; search runs until deadline and returns best-so-far
+    public static Zug iterativeDeepening (Piece[][] board, boolean isWhite, long hash, long timeLimitMs){
+        long now = System.currentTimeMillis();
+        setSearchDeadline(now + Math.max(1, timeLimitMs));
+        ArrayList<Zug> order = possibleMoves(isWhite, board);
+        if (order.isEmpty()) return null;
+        Zug bestSoFar = order.getFirst();
+
+        int depth = 1;
+        while (depth <= 64) {
+            if (System.currentTimeMillis() >= searchEndTimeMs) break;
+            // System.out.println("Tiefe: " + depth);
+            ArrayList<Zug> newOrder = findBestMoves(board, depth, isWhite, order, hash);
+            if (!newOrder.isEmpty()) bestSoFar = newOrder.getFirst();
+            order = newOrder;
+
+            // Early exit on time up
+            if (timeUp || System.currentTimeMillis() >= searchEndTimeMs) break;
+
+            // Reset for next depth stats
+            ttHits = 0;
+            ttLookups = 0;
+            depth++;
+        }
+        return bestSoFar;
+    }
+
+    public static void setSearchDeadline(long deadlineMs) {
+        searchEndTimeMs = deadlineMs;
+        timeUp = false;
     }
     public static boolean wasEnPassant(Zug zug, Piece[][] board, Piece squareMovedOnto){
         if(board[zug.startY][zug.startX] instanceof Bauer && squareMovedOnto instanceof Empty && Math.abs(zug.endX - zug.startX) == 1){
