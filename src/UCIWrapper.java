@@ -1,15 +1,27 @@
 import java.util.Scanner;
+import java.io.IOException;
 
 public class UCIWrapper {
 
-    private static final BotEngine engine = new BotEngine();
     static String[] moveList;
     static String moves;
     static int moveCount;
     private static int lastProcessedMoveCount = 0;
     public static long startHash;
+    private static boolean baseWhiteToMove = true; // side to move at start of current position
 
     public static void main(String[] args) {
+        // Initial engine state similar to LichessBotStream game start
+        Board.setupBoard(Board.brett);
+        MoveFinder.transpositionTable.clear();
+        Zobrist.initZobrist();
+        startHash = Zobrist.computeHash(Board.brett, true);
+        baseWhiteToMove = true;
+        moves = "";
+        moveList = new String[0];
+        moveCount = 0;
+        lastProcessedMoveCount = 0;
+
         Scanner in = new Scanner(System.in);
 
         while (in.hasNextLine()) {
@@ -24,15 +36,30 @@ public class UCIWrapper {
                 System.out.println("readyok");
             }
             else if (command.startsWith("ucinewgame")) {
-                engine.newGame();
-                lastProcessedMoveCount = 0; // reset history
-
+                // Reset full engine state and TT like Lichess game start
+                Board.setupBoard(Board.brett);
+                MoveFinder.transpositionTable.clear();
+                Zobrist.initZobrist();
+                startHash = Zobrist.computeHash(Board.brett, true);
+                baseWhiteToMove = true;
+                lastProcessedMoveCount = 0;
+                moves = "";
+                moveList = new String[0];
+                moveCount = 0;
             }
             else if (command.startsWith("position")) {
-                // reset game if startpos
+                // UCI 'position' provides a full position description. Reset incremental state.
+                lastProcessedMoveCount = 0;
+                moves = "";
+                moveList = new String[0];
+                moveCount = 0;
+
                 if (command.contains("startpos")) {
-                    engine.newGame();
-                    lastProcessedMoveCount = 0;
+                    // Start position
+                    Board.setupBoard(Board.brett);
+                    baseWhiteToMove = true;
+                    // Do not clear TT here; use ucinewgame for a hard reset
+                    startHash = Zobrist.computeHash(Board.brett, baseWhiteToMove);
                 }
 
                 // load FEN if given
@@ -41,36 +68,51 @@ public class UCIWrapper {
                     if (fen.contains("moves")) {
                         fen = fen.substring(0, fen.indexOf("moves")).trim();
                     }
-                    engine.loadFEN(fen);
-                    lastProcessedMoveCount = 0;
-
+                    Board.brett = Board.fenToBoard(fen);
                     // detect side to move from FEN
                     String[] parts = fen.split(" ");
                     if (parts.length > 1) {
-                        boolean whiteToMove = parts[1].equals("w");
-                        engine.setSideToMove(whiteToMove);
+                        baseWhiteToMove = parts[1].equals("w");
+                    } else {
+                        baseWhiteToMove = true;
                     }
+                    startHash = Zobrist.computeHash(Board.brett, baseWhiteToMove);
                 }
 
-                // process moves
+                // process moves appended to the position
                 if (command.contains("moves")) {
-                    moves = command.substring(command.indexOf("moves") + 6);
-                    moveList = moves.trim().split(" ");
+                    moves = command.substring(command.indexOf("moves") + 6).trim();
+                    moveList = moves.isEmpty() ? new String[0] : moves.split(" ");
                     moveCount = moveList.length;
 
-                    // apply any new moves since last processed
-                    for (int i = lastProcessedMoveCount; i < moveList.length; i++) {
-                        engine.makeMove(moveList[i]);
+                    // apply the moves from the described root
+                    for (int i = 0; i < moveList.length; i++) {
+                        Zug zug = new Zug(moveList[i]);
+                        MoveInfo info = MoveFinder.saveMoveInfo(zug, Board.brett);
+                        startHash = MoveFinder.doMove(zug, Board.brett, info, startHash);
                     }
 
                     lastProcessedMoveCount = moveList.length;
                 }
             }
             else if (command.startsWith("go")) {
-                // determine whose turn it is
-                boolean whiteToMove = engine.isWhiteToMove(); // let engine handle it
-                String bestMove = engine.bestMove(whiteToMove);
-                System.out.println("bestmove " + bestMove);
+                // Determine side to move: start side flipped by number of moves applied
+                boolean whiteToMove = (moveCount % 2 == 0) ? baseWhiteToMove : !baseWhiteToMove;
+
+                // Try opening move first, else search
+                try {
+                    Zug opening = OpeningDictionary.getNextOpeningMove(moves == null ? "" : moves);
+                    if (opening != null) {
+                        System.out.println("bestmove " + opening.processZug());
+                    } else {
+                        Zug best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash);
+                        System.out.println("bestmove " + best.processZug());
+                    }
+                } catch (IOException e) {
+                    // If opening book unavailable, fall back to search
+                    Zug best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash);
+                    System.out.println("bestmove " + best.processZug());
+                }
             }
             else if (command.equals("quit")) {
                 break;
