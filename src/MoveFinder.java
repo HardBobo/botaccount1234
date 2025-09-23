@@ -7,6 +7,8 @@ public class MoveFinder {
     // Time control for search
     private static volatile long searchEndTimeMs = Long.MAX_VALUE;
     private static volatile boolean timeUp = false;
+    // Set to true if an iteration was aborted due to timeout inside the search
+    private static volatile boolean depthAborted = false;
 
     static final int EXACT = 0;
     static final int LOWERBOUND = 1;
@@ -94,6 +96,7 @@ public class MoveFinder {
 
         if (System.currentTimeMillis() >= searchEndTimeMs) {
             timeUp = true;
+            depthAborted = true;
             return Evaluation.evaluation(board, isWhite);
         }
 
@@ -178,6 +181,7 @@ public class MoveFinder {
     public static int qSearch(Piece [][] board, int alpha, int beta, boolean isWhite, long hash){
         if (System.currentTimeMillis() >= searchEndTimeMs) {
             timeUp = true;
+            depthAborted = true;
             return Evaluation.evaluation(board, isWhite);
         }
         nodes++;
@@ -451,26 +455,32 @@ public class MoveFinder {
         setSearchDeadline(now + Math.max(1, timeLimitMs));
         ArrayList<Zug> order = possibleMoves(isWhite, board);
         if (order.isEmpty()) return null;
-
-	    MoveOrdering.orderMoves(order, board, isWhite);
-
         Zug bestSoFar = order.getFirst();
 
         int depth = 1;
         while (depth <= 64) {
             if (System.currentTimeMillis() >= searchEndTimeMs) break;
+            // Prepare depth
+            timeUp = false;
+            depthAborted = false;
             // System.out.println("Tiefe: " + depth);
             ArrayList<Zug> newOrder = findBestMoves(board, depth, isWhite, order, hash);
+
+            // If depth aborted due to timeout, keep last fully completed result and stop
+            if (depthAborted || timeUp || System.currentTimeMillis() >= searchEndTimeMs) {
+                break;
+            }
+
             if (!newOrder.isEmpty()) bestSoFar = newOrder.getFirst();
             order = newOrder;
 
-            // Early exit on time up
-            if (timeUp || System.currentTimeMillis() >= searchEndTimeMs) break;
+            // Reset for next depth stats
+            ttHits = 0;
+            ttLookups = 0;
             depth++;
         }
         return bestSoFar;
     }
-
     public static void setSearchDeadline(long deadlineMs) {
         searchEndTimeMs = deadlineMs;
         timeUp = false;
