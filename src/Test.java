@@ -9,6 +9,7 @@ public class Test {
         temp = Board.fenToBoard("8/k7/3p4/p2P1p2/P2P1P2/8/8/K7 w - -");
         Zobrist.initZobrist();
         startHash = Zobrist.computeHash(temp, true);
+        MoveFinder.transpositionTable.clear();
         test1();
     }
     public static void test1(){
@@ -21,12 +22,12 @@ public class Test {
 //        long startTime = System.currentTimeMillis();
 
         boolean whiteToMove = true;
+//
+//        ArrayList<Zug> pM = MoveFinder.possibleMoves(whiteToMove, temp);
+//        pM.removeIf(zug -> !MoveFinder.isLegalMove(zug, temp, whiteToMove));
+//        MoveOrdering.orderMoves(pM, temp, whiteToMove);
 
-        ArrayList<Zug> pM = MoveFinder.possibleMoves(whiteToMove, temp);
-        pM.removeIf(zug -> !MoveFinder.isLegalMove(zug, temp, whiteToMove));
-        MoveOrdering.orderMoves(pM, temp, whiteToMove);
-
-        System.out.println(MoveFinder.findBestMoves(temp, 24, whiteToMove, pM, startHash).getFirst().processZug());
+        System.out.println(MoveFinder.iterativeDeepening(temp, whiteToMove, startHash).processZug());
 //        MoveInfo info = MoveFinder.saveMoveInfo(new Zug("d4c3"), temp);
 //        MoveFinder.doMove(new Zug("d4c3"), temp, info);
 //

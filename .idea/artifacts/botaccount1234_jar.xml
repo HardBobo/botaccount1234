@@ -1,0 +1,9 @@
+<component name="ArtifactManager">
+  <artifact type="jar" build-on-make="true" name="botaccount1234:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/botaccount1234_jar</output-path>
+    <root id="archive" name="Schach2.jar">
+      <element id="module-output" name="Schach2" />
+      <element id="extracted-dir" path="$USER_HOME$/Downloads/json-20240303.jar" path-in-jar="/" />
+    </root>
+  </artifact>
+</component>

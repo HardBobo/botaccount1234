@@ -10,7 +10,7 @@ public class Spiel {
         //System.out.println("du kannst keine eigene figur schlagen");
         return zielFigur instanceof Empty || zielFigur.isWhite() != white;
     }
-    public static Koordinaten kingCoordinates(boolean white, Piece[][] board){
+    public static Koordinaten kingCoordinates(boolean white){
         // Use PieceTracker for efficient king lookup instead of scanning the entire board
         return Board.pieceTracker.getKing(white);
     }

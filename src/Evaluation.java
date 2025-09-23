@@ -162,7 +162,7 @@ public class Evaluation {
         return 2 * pieceType + color;
     }
 
-    public static int [] evaluation(Piece[][] board, boolean isWhite) {
+    public static int evaluation(Piece[][] board, boolean isWhite) {
         int[] mg = new int[2]; // middlegame scores for white and black
         int[] eg = new int[2]; // endgame scores for white and black
         int gamePhase = 0;
@@ -183,8 +183,7 @@ public class Evaluation {
         int mgScore = mg[side] - mg[other];
         int egScore = eg[side] - eg[other];
         // evaluation based on weighted average of middlegame and endgame
-        int eval =  (mgScore * gamePhase + egScore * egPhase) / 24;
-        return new int[]{eval, mg[WHITE], mg[BLACK], eg[WHITE], eg[BLACK], gamePhase};
+        return (mgScore * gamePhase + egScore * egPhase) / 24;
     }
     
     /**

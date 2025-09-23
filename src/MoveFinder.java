@@ -36,11 +36,6 @@ public class MoveFinder {
 
             hash = doMove(zug, board, info, hash);
 
-            long recalculatedHash = Zobrist.computeHash(board, !isWhite);
-            if (hash != recalculatedHash) {
-                System.err.println("HASH MISMATCH! Expected: " + hash + ", Actual: " + recalculatedHash);
-            }
-
             // Negate score to get perspective of current player
             int score = -negamax(board, depth-1, Integer.MIN_VALUE + 1, Integer.MAX_VALUE - 1, !isWhite, hash);
 
@@ -127,11 +122,6 @@ public class MoveFinder {
 
             hash = doMove(zug, board, info, hash);
 
-            long recalculatedHash = Zobrist.computeHash(board, !isWhite);
-            if (hash != recalculatedHash) {
-                System.err.println("HASH MISMATCH! Expected: " + hash + ", Actual: " + recalculatedHash);
-            }
-
             value = Math.max(value, -negamax(board, depth - 1, -beta, -alpha, !isWhite, hash));
 
             undoMove(zug, board, info);
@@ -169,7 +159,7 @@ public class MoveFinder {
 
         int alphaOrig = alpha;
 
-        int best_value = Evaluation.evaluation(board, isWhite)[0];
+        int best_value = Evaluation.evaluation(board, isWhite);
 
         if( best_value >= beta ) {
             return best_value;
@@ -209,11 +199,6 @@ public class MoveFinder {
 
             hash = doMove(zug, board, info, hash);
 
-            long recalculatedHash = Zobrist.computeHash(board, !isWhite);
-            if (hash != recalculatedHash) {
-                System.err.println("HASH MISMATCH! Expected: " + hash + ", Actual: " + recalculatedHash);
-            }
-
             int score = -qSearch(board, -beta, -alpha, !isWhite, hash);
 
             undoMove(zug, board, info);
@@ -223,7 +208,7 @@ public class MoveFinder {
             if( score >= beta ) {
 
                 flag = LOWERBOUND;
-                transpositionTable.put(hash, new TTEntry(best_value, 0, flag));
+                transpositionTable.put(hash, new TTEntry(score, 0, flag));
 
                 return score;
             }
@@ -253,11 +238,6 @@ public class MoveFinder {
 
 
     public static long doMove(Zug zug, Piece[][] board, MoveInfo info, long hash) {
-
-        long originalHash = hash;
-
-        // Debug: Hash vor jeder Änderung ausgeben
-        System.out.println("Hash vor Zug: " + hash);
 
         boolean [] castleRightsBefore = getCastleRights(board);
         int epBefore = Zobrist.getEnPassantFile(board, info.movingPiece.isWhite());
@@ -306,15 +286,6 @@ public class MoveFinder {
         Board.pieceTracker.updateMove(zug, info, board);
 
         hash = Zobrist.updateHash(hash, zug, info, board, castleRightsBefore, castleRightsAfter, epBefore, epAfter);
-
-        long computedHash = Zobrist.computeHash(board, !info.movingPiece.isWhite());
-        if (hash != computedHash) {
-            System.err.println("MISMATCH Details:");
-            System.err.println("  Zug: " + zug.processZug());
-            System.err.println("  Original Hash: " + originalHash);
-            System.err.println("  Incremental Hash: " + hash);
-            System.err.println("  Computed Hash: " + computedHash);
-        }
         
         return hash;
     }
@@ -411,7 +382,7 @@ public class MoveFinder {
     public static Zug iterativeDeepening (Piece[][] board, boolean isWhite, long hash){
         ArrayList<Zug> order = possibleMoves(isWhite, board);
 
-        for(int i = 1; i<5; i++) {
+        for(int i = 1; i<6; i++) {
             System.out.println("Tiefe: " + i);
 
             order = (findBestMoves(board, i, isWhite,order, hash));
@@ -624,7 +595,7 @@ public class MoveFinder {
         return rights;
     }
     public static boolean inCheck(Piece[][] board, boolean isWhite) {
-        Koordinaten coords = Spiel.kingCoordinates(isWhite, board);
+        Koordinaten coords = Spiel.kingCoordinates(isWhite);
         return Spiel.isSquareAttacked(board, coords.x, coords.y, !isWhite);
     }
     public static boolean isCapture(Piece [][] board, Zug zug) {

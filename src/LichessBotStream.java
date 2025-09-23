@@ -16,7 +16,6 @@ public class LichessBotStream {
     static String moves; //alle bisherigen züge aber in einem string
     static int moveCount; //um herauszufinden, wer dran ist
     private static int lastProcessedMoveCount = 0; //für gui update und game state update
-    static Spiel spiel = new Spiel();
     public static long startHash;
 
     public static void main(String[] args) throws IOException, InterruptedException {
@@ -104,9 +103,10 @@ public class LichessBotStream {
                                     // mit status mate stalemate resign draw oder outoftime | angebot zu unentschieden wird immer ignoriert
                                 }
                                 else if ("gameFull".equals(type)) { // erster state nach gamestart
+                                    Board.setupBoard(Board.brett);
                                     MoveFinder.transpositionTable.clear();
                                     Zobrist.initZobrist();
-                                    startHash = Zobrist.computeHash(Board.brett, isWhite);
+                                    startHash = Zobrist.computeHash(Board.brett, true);
                                     if(isWhite) {
                                         Zug zug = Objects.requireNonNull(OpeningDictionary.getNextOpeningMove(""));
                                         playMove(gameId, zug.processZug());
@@ -126,7 +126,10 @@ public class LichessBotStream {
                                         lastProcessedMoveCount = 0;
                                         moves = "";
                                         moveList = new String [0];
-                                        spiel = new Spiel();
+                                        Board.setupBoard(Board.brett);
+                                        MoveFinder.transpositionTable.clear();
+                                        Zobrist.initZobrist();
+                                        startHash = Zobrist.computeHash(Board.brett, true);
                                     }
                                     else { // normale züge
                                         moves = event.getString("moves"); // bisherige Züge geuptdated
