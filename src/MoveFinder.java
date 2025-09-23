@@ -26,6 +26,12 @@ public class MoveFinder {
         orderedMoves.removeIf(zug -> !isLegalMove(zug, board, isWhite));
         if (orderedMoves.isEmpty()) return new ArrayList<>();
 
+        // Prefer TT best move at root if available
+        TTEntry rootTT = transpositionTable.get(hash);
+        if (rootTT != null && rootTT.isValid && rootTT.bestMove != null) {
+            moveToFront(orderedMoves, rootTT.bestMove);
+        }
+
         // List to hold moves with their scores
         ArrayList<ZugScore> scoredMoves = new ArrayList<>();
 
@@ -114,7 +120,13 @@ public class MoveFinder {
 
         MoveOrdering.orderMoves(pseudoLegalMoves, board, isWhite);
 
+        // If we have a TT entry for this node, try its best move first
+        if (entry != null && entry.isValid && entry.bestMove != null) {
+            moveToFront(pseudoLegalMoves, entry.bestMove);
+        }
+
         int value = Integer.MIN_VALUE;
+        Zug bestMove = null;
         for (Zug zug : pseudoLegalMoves){
 
             MoveInfo info = saveMoveInfo(zug, board);
@@ -122,7 +134,11 @@ public class MoveFinder {
 
             hash = doMove(zug, board, info, hash);
 
-            value = Math.max(value, -negamax(board, depth - 1, -beta, -alpha, !isWhite, hash));
+            int child = -negamax(board, depth - 1, -beta, -alpha, !isWhite, hash);
+            if (child > value) {
+                value = child;
+                bestMove = zug;
+            }
 
             undoMove(zug, board, info);
             hash = oldHash;
@@ -142,7 +158,7 @@ public class MoveFinder {
             flag = EXACT;
         }
 
-        transpositionTable.put(hash, new TTEntry(value, depth, flag));
+        transpositionTable.put(hash, new TTEntry(value, depth, flag, bestMove));
 
         return value;
     }
@@ -189,7 +205,14 @@ public class MoveFinder {
 
         MoveOrdering.orderMoves(forcingMoves, board, isWhite);
 
+        // If we have a TT entry for this node, try its best move first
+        if (entry != null && entry.isValid && entry.bestMove != null) {
+            moveToFront(forcingMoves, entry.bestMove);
+        }
+
         int flag;
+
+        Zug bestMove = null;
 
         for(Zug zug : forcingMoves)  {
 
@@ -208,19 +231,21 @@ public class MoveFinder {
             if( score >= beta ) {
 
                 flag = LOWERBOUND;
-                transpositionTable.put(hash, new TTEntry(score, 0, flag));
+                transpositionTable.put(hash, new TTEntry(score, 0, flag, zug));
 
                 return score;
             }
-            if( score > best_value )
+            if( score > best_value ) {
                 best_value = score;
+                bestMove = zug;
+            }
             if( score > alpha )
                 alpha = score;
         }
         if (best_value <= alphaOrig) flag = UPPERBOUND;
         else flag = EXACT;
 
-        transpositionTable.put(hash, new TTEntry(best_value, 0, flag));
+        transpositionTable.put(hash, new TTEntry(best_value, 0, flag, bestMove));
 
         return best_value;
     }
@@ -650,5 +675,25 @@ public class MoveFinder {
             return (isWhite && zug.endY == 0) || (!isWhite && zug.endY == 7);
         }
         return false;
+    }
+
+    // Helpers to prioritize TT best move in ordering
+    private static boolean sameMove(Zug a, Zug b) {
+        if (a == null || b == null) return false;
+        if (a.startX != b.startX || a.startY != b.startY || a.endX != b.endX || a.endY != b.endY) return false;
+        return a.promoteTo == b.promoteTo;
+    }
+
+    private static void moveToFront(List<Zug> moves, Zug target) {
+        if (moves == null || moves.isEmpty() || target == null) return;
+        for (int i = 0; i < moves.size(); i++) {
+            if (sameMove(moves.get(i), target)) {
+                if (i > 0) {
+                    Zug z = moves.remove(i);
+                    moves.add(0, z);
+                }
+                break;
+            }
+        }
     }
 }
