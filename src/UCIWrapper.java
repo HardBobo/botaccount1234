@@ -144,6 +144,7 @@ public class UCIWrapper {
                             }
                         } else {
                             long thinkMs = TimeManager.computeThinkTimeMs(Board.brett, whiteToMove, timeLeft, inc, moveCount);
+                            thinkMs = Math.max(5, thinkMs - 20); // safety margin
                             best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash, thinkMs);
                             if (best == null) {
                                 // Fallback if no move found (should not happen)
@@ -162,6 +163,7 @@ public class UCIWrapper {
                         if (best == null) best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash, 200);
                     } else {
                         long thinkMs = TimeManager.computeThinkTimeMs(Board.brett, whiteToMove, timeLeft, inc, moveCount);
+                        thinkMs = Math.max(5, thinkMs - 20); // safety margin
                         best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash, thinkMs);
                         if (best == null) best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash);
                     }

@@ -94,7 +94,7 @@ public class MoveFinder {
 
         if (System.currentTimeMillis() >= searchEndTimeMs) {
             timeUp = true;
-            return 100;
+            return Evaluation.evaluation(board, isWhite);
         }
 
         nodes++;
@@ -168,7 +168,9 @@ public class MoveFinder {
             flag = EXACT;
         }
 
-        transpositionTable.put(hash, new TTEntry(value, depth, flag, bestMove));
+        if (!timeUp) {
+            transpositionTable.put(hash, new TTEntry(value, depth, flag, bestMove));
+        }
 
         return value;
     }
@@ -176,7 +178,7 @@ public class MoveFinder {
     public static int qSearch(Piece [][] board, int alpha, int beta, boolean isWhite, long hash){
         if (System.currentTimeMillis() >= searchEndTimeMs) {
             timeUp = true;
-            return 100;
+            return Evaluation.evaluation(board, isWhite);
         }
         nodes++;
         ttLookups++;
@@ -245,8 +247,9 @@ public class MoveFinder {
             if( score >= beta ) {
 
                 flag = LOWERBOUND;
-                transpositionTable.put(hash, new TTEntry(score, 0, flag, zug));
-
+                if (!timeUp) {
+                    transpositionTable.put(hash, new TTEntry(score, 0, flag, zug));
+                }
                 return score;
             }
             if( score > best_value ) {
@@ -259,8 +262,9 @@ public class MoveFinder {
         if (best_value <= alphaOrig) flag = UPPERBOUND;
         else flag = EXACT;
 
-        transpositionTable.put(hash, new TTEntry(best_value, 0, flag, bestMove));
-
+        if (!timeUp) {
+            transpositionTable.put(hash, new TTEntry(best_value, 0, flag, bestMove));
+        }
         return best_value;
     }
 
@@ -424,6 +428,8 @@ public class MoveFinder {
         ArrayList<Zug> order = possibleMoves(isWhite, board);
         if (order.isEmpty()) return null;
 
+	MoveOrdering.orderMoves(possibleMoves, board, isWhite);
+
         Zug bestSoFar = order.getFirst();
 
         for(int i = 1; i<6; i++) {
@@ -457,6 +463,9 @@ public class MoveFinder {
         setSearchDeadline(now + Math.max(1, timeLimitMs));
         ArrayList<Zug> order = possibleMoves(isWhite, board);
         if (order.isEmpty()) return null;
+
+	MoveOrdering.orderMoves(possibleMoves, board, isWhite);
+
         Zug bestSoFar = order.getFirst();
 
         int depth = 1;
@@ -488,6 +497,9 @@ public class MoveFinder {
         setSearchDeadline(Long.MAX_VALUE);
         ArrayList<Zug> order = possibleMoves(isWhite, board);
         if (order.isEmpty()) return null;
+	
+	MoveOrdering.orderMoves(possibleMoves, board, isWhite);
+
         ArrayList<Zug> sorted = findBestMoves(board, Math.max(1, depth), isWhite, order, hash);
         if (sorted.isEmpty()) return null;
         return sorted.get(0);

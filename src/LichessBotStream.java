@@ -28,6 +28,9 @@ public class LichessBotStream {
     // Verbleibende Zeiten (Millisekunden) – aktualisiert pro Zug aus dem Game-Stream
     private static long whiteTimeMs = -1;
     private static long blackTimeMs = -1;
+    // Inkremente in Millisekunden, falls vom Game-Stream geliefert (winc/binc); fallback: incrementSeconds*1000
+    private static long whiteIncMs = 0;
+    private static long blackIncMs = 0;
 
     public static void main(String[] args) throws IOException, InterruptedException {
         // Validate configuration before starting
@@ -85,6 +88,8 @@ if("gameStart".equals(type)) { //wenn spielstart in gamestream übergehen
                             if (pendingBaseTimeSeconds != null) {
                                 baseTimeSeconds = pendingBaseTimeSeconds;
                                 incrementSeconds = pendingIncrementSeconds != null ? pendingIncrementSeconds : 0;
+                                whiteIncMs = (long) incrementSeconds * 1000L;
+                                blackIncMs = (long) incrementSeconds * 1000L;
                                 System.out.println("[TC] Set from pending (challenge): base=" + baseTimeSeconds + "s, inc=" + incrementSeconds + "s");
                             } else {
                                 // Korrenspondenz/Unbekannt -> erstmal -1/0, wird ggf. im Game-Stream (gameFull) überschrieben
@@ -148,17 +153,26 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                                     try {
                                         if (event.has("clock")) {
                                             JSONObject clock = event.getJSONObject("clock");
-                                            // Lichess liefert hier i.d.R. Sekundenwerte
+                                            // Lichess liefert hier i.d.R. Sekundenwerte (initial/increment)
                                             baseTimeSeconds = clock.optInt("initial", baseTimeSeconds);
                                             incrementSeconds = clock.optInt("increment", incrementSeconds);
+                                            // Falls state-incs nicht kommen, nutze diese als Fallback
+                                            whiteIncMs = (long) incrementSeconds * 1000L;
+                                            blackIncMs = (long) incrementSeconds * 1000L;
                                             System.out.println("[TC] GameFull TimeControl: base=" + baseTimeSeconds + "s, inc=" + incrementSeconds + "s");
                                         }
-                                        // Aktuelle Zeiten aus dem state (Millisekunden)
+                                        // Aktuelle Zeiten aus dem state; laut API in Millisekunden
                                         if (event.has("state")) {
                                             JSONObject state = event.getJSONObject("state");
-                                            whiteTimeMs = state.optLong("wtime", whiteTimeMs);
-                                            blackTimeMs = state.optLong("btime", blackTimeMs);
-                                            System.out.println("[TC] GameFull State Times: wtime=" + whiteTimeMs + "ms, btime=" + blackTimeMs + "ms");
+                                            long wt = state.optLong("wtime", whiteTimeMs);
+                                            long bt = state.optLong("btime", blackTimeMs);
+                                            // Schutz: falls Sekunden statt Millisekunden geliefert wurden (unerwartet), konvertiere heuristisch
+                                            whiteTimeMs = normalizeMs(wt);
+                                            blackTimeMs = normalizeMs(bt);
+                                            // Inkremente ggf. aus state (Millisekunden)
+                                            whiteIncMs = state.optLong("winc", whiteIncMs);
+                                            blackIncMs = state.optLong("binc", blackIncMs);
+                                            System.out.println("[TC] GameFull State Times: wtime=" + whiteTimeMs + "ms, btime=" + blackTimeMs + "ms, winc=" + whiteIncMs + "ms, binc=" + blackIncMs + "ms");
                                         }
                                     } catch (Exception e) {
                                         System.err.println("Fehler beim Lesen der Zeitkontrolle aus gameFull: " + e.getMessage());
@@ -176,10 +190,12 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                                         lastProcessedMoveCount++;
                                     }
                                 } else if ("gameState".equals(type)) { // normaler gamestate
-                                    // Zeit pro Zug (Millisekunden) aus gameState
+                                    // Zeit pro Zug (Millisekunden) aus gameState (wtime/btime), ggf. winc/binc
                                     try {
-                                        if (event.has("wtime")) whiteTimeMs = event.getLong("wtime");
-                                        if (event.has("btime")) blackTimeMs = event.getLong("btime");
+                                        if (event.has("wtime")) whiteTimeMs = normalizeMs(event.getLong("wtime"));
+                                        if (event.has("btime")) blackTimeMs = normalizeMs(event.getLong("btime"));
+                                        if (event.has("winc")) whiteIncMs = event.getLong("winc");
+                                        if (event.has("binc")) blackIncMs = event.getLong("binc");
                                     } catch (Exception ignored) {}
 
                                     if(event.getString("status").equals("mate")
@@ -228,13 +244,15 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                                                 }
                                                 else {
                                                     long timeLeft = whiteTimeMs; // tracked from stream in ms
-                                                    long incMs = Math.max(0, incrementSeconds) * 1000L;
+                                                    long incMs = whiteIncMs > 0 ? whiteIncMs : Math.max(0, incrementSeconds) * 1000L;
+                                                    System.out.println("[TC] White move: timeLeft=" + timeLeft + "ms, incMs=" + incMs);
                                                     Zug best;
                                                     if (timeLeft >= 0 && timeLeft <= 4000) {
                                                         best = MoveFinder.searchToDepth(Board.brett, true, startHash, 3);
                                                         if (best == null) best = MoveFinder.iterativeDeepening(Board.brett, true, startHash, 200);
                                                     } else {
                                                         long thinkMs = TimeManager.computeThinkTimeMs(Board.brett, true, timeLeft, incMs, moveCount);
+                                                        thinkMs = Math.max(5, thinkMs - 20); // safety margin
                                                         best = MoveFinder.iterativeDeepening(Board.brett, true, startHash, thinkMs);
                                                         if (best == null) best = MoveFinder.iterativeDeepening(Board.brett, true, startHash);
                                                     }
@@ -249,13 +267,15 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                                                 }
                                                 else {
                                                     long timeLeft = blackTimeMs; // tracked from stream in ms
-                                                    long incMs = Math.max(0, incrementSeconds) * 1000L;
+                                                    long incMs = blackIncMs > 0 ? blackIncMs : Math.max(0, incrementSeconds) * 1000L;
+                                                    System.out.println("[TC] Black move: timeLeft=" + timeLeft + "ms, incMs=" + incMs);
                                                     Zug best;
                                                     if (timeLeft >= 0 && timeLeft <= 4000) {
                                                         best = MoveFinder.searchToDepth(Board.brett, false, startHash, 3);
                                                         if (best == null) best = MoveFinder.iterativeDeepening(Board.brett, false, startHash, 200);
                                                     } else {
                                                         long thinkMs = TimeManager.computeThinkTimeMs(Board.brett, false, timeLeft, incMs, moveCount);
+                                                        thinkMs = Math.max(5, thinkMs - 20); // safety margin
                                                         best = MoveFinder.iterativeDeepening(Board.brett, false, startHash, thinkMs);
                                                         if (best == null) best = MoveFinder.iterativeDeepening(Board.brett, false, startHash);
                                                     }
@@ -317,5 +337,14 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
     }
     public static long getBlackTimeMs() {
         return blackTimeMs;
+    }
+
+    // Heuristik: Falls times < 1000 aber wir erwarten ms, konvertiere Sekunden → Millisekunden
+    private static long normalizeMs(long v) {
+        if (v > 0 && v < 1000) {
+            // Wenn initial baseTime groß wirkt (>= 5s), ist die Wahrscheinlichkeit hoch, dass v Sekunden war
+            if (baseTimeSeconds >= 5) return v * 1000L;
+        }
+        return v;
     }
 }
