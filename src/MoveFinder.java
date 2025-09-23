@@ -428,7 +428,7 @@ public class MoveFinder {
         ArrayList<Zug> order = possibleMoves(isWhite, board);
         if (order.isEmpty()) return null;
 
-	MoveOrdering.orderMoves(possibleMoves, board, isWhite);
+	    MoveOrdering.orderMoves(order, board, isWhite);
 
         Zug bestSoFar = order.getFirst();
 
@@ -440,18 +440,6 @@ public class MoveFinder {
             if (!order.isEmpty()) bestSoFar = order.getFirst();
             System.out.println("Bester Zug bisher: " + bestSoFar.processZug());
 
-            double ttHitRatio = ttLookups == 0 ? 0
-                    : 100.0 * ttHits / ttLookups;
-
-            System.out.printf("Tiefe: %d, TT hit ratio (relative): %.2f%% (%d/%d)%n",
-                    i,
-                    ttHitRatio,
-                    ttHits,
-                    ttLookups);
-
-            // Reset for the next depth
-            ttHits = 0;
-            ttLookups = 0;
         }
 
         return bestSoFar;
@@ -464,7 +452,7 @@ public class MoveFinder {
         ArrayList<Zug> order = possibleMoves(isWhite, board);
         if (order.isEmpty()) return null;
 
-	MoveOrdering.orderMoves(possibleMoves, board, isWhite);
+	    MoveOrdering.orderMoves(order, board, isWhite);
 
         Zug bestSoFar = order.getFirst();
 
@@ -478,10 +466,6 @@ public class MoveFinder {
 
             // Early exit on time up
             if (timeUp || System.currentTimeMillis() >= searchEndTimeMs) break;
-
-            // Reset for next depth stats
-            ttHits = 0;
-            ttLookups = 0;
             depth++;
         }
         return bestSoFar;
@@ -498,7 +482,7 @@ public class MoveFinder {
         ArrayList<Zug> order = possibleMoves(isWhite, board);
         if (order.isEmpty()) return null;
 	
-	MoveOrdering.orderMoves(possibleMoves, board, isWhite);
+	    MoveOrdering.orderMoves(order, board, isWhite);
 
         ArrayList<Zug> sorted = findBestMoves(board, Math.max(1, depth), isWhite, order, hash);
         if (sorted.isEmpty()) return null;
