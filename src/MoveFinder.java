@@ -482,6 +482,16 @@ public class MoveFinder {
         searchEndTimeMs = deadlineMs;
         timeUp = false;
     }
+
+    // Fixed-depth search utility used for low-time situations
+    public static Zug searchToDepth(Piece[][] board, boolean isWhite, long hash, int depth) {
+        setSearchDeadline(Long.MAX_VALUE);
+        ArrayList<Zug> order = possibleMoves(isWhite, board);
+        if (order.isEmpty()) return null;
+        ArrayList<Zug> sorted = findBestMoves(board, Math.max(1, depth), isWhite, order, hash);
+        if (sorted.isEmpty()) return null;
+        return sorted.get(0);
+    }
     public static boolean wasEnPassant(Zug zug, Piece[][] board, Piece squareMovedOnto){
         if(board[zug.startY][zug.startX] instanceof Bauer && squareMovedOnto instanceof Empty && Math.abs(zug.endX - zug.startX) == 1){
             return true;

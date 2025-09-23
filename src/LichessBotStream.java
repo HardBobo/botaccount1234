@@ -227,7 +227,18 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                                                     playMove(gameId, zug.processZug());
                                                 }
                                                 else {
-                                                    playMove(gameId, MoveFinder.iterativeDeepening(Board.brett,true, startHash).processZug());
+                                                    long timeLeft = whiteTimeMs; // tracked from stream in ms
+                                                    long incMs = Math.max(0, incrementSeconds) * 1000L;
+                                                    Zug best;
+                                                    if (timeLeft >= 0 && timeLeft <= 4000) {
+                                                        best = MoveFinder.searchToDepth(Board.brett, true, startHash, 3);
+                                                        if (best == null) best = MoveFinder.iterativeDeepening(Board.brett, true, startHash, 200);
+                                                    } else {
+                                                        long thinkMs = TimeManager.computeThinkTimeMs(Board.brett, true, timeLeft, incMs, moveCount);
+                                                        best = MoveFinder.iterativeDeepening(Board.brett, true, startHash, thinkMs);
+                                                        if (best == null) best = MoveFinder.iterativeDeepening(Board.brett, true, startHash);
+                                                    }
+                                                    playMove(gameId, best.processZug());
                                                 }
                                             }
                                         } else {
@@ -237,7 +248,18 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                                                     playMove(gameId, zug.processZug());
                                                 }
                                                 else {
-                                                    playMove(gameId, MoveFinder.iterativeDeepening(Board.brett, false, startHash).processZug());
+                                                    long timeLeft = blackTimeMs; // tracked from stream in ms
+                                                    long incMs = Math.max(0, incrementSeconds) * 1000L;
+                                                    Zug best;
+                                                    if (timeLeft >= 0 && timeLeft <= 4000) {
+                                                        best = MoveFinder.searchToDepth(Board.brett, false, startHash, 3);
+                                                        if (best == null) best = MoveFinder.iterativeDeepening(Board.brett, false, startHash, 200);
+                                                    } else {
+                                                        long thinkMs = TimeManager.computeThinkTimeMs(Board.brett, false, timeLeft, incMs, moveCount);
+                                                        best = MoveFinder.iterativeDeepening(Board.brett, false, startHash, thinkMs);
+                                                        if (best == null) best = MoveFinder.iterativeDeepening(Board.brett, false, startHash);
+                                                    }
+                                                    playMove(gameId, best.processZug());
                                                 }
                                             }
                                         }

@@ -135,22 +135,35 @@ public class UCIWrapper {
                     } else {
                         long timeLeft = whiteToMove ? wtimeMs : btimeMs;
                         long inc = whiteToMove ? wincMs : bincMs;
-                        long thinkMs = TimeManager.computeThinkTimeMs(Board.brett, whiteToMove, timeLeft, inc, moveCount);
-                        Zug best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash, thinkMs);
-                        if (best == null) {
-                            // Fallback if no move found (should not happen)
-                            best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash);
+                        Zug best;
+                        if (timeLeft >= 0 && timeLeft <= 4000) {
+                            // Low time: run a fixed small depth which is nearly instant
+                            best = MoveFinder.searchToDepth(Board.brett, whiteToMove, startHash, 3);
+                            if (best == null) {
+                                best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash, 200); // tiny fallback budget
+                            }
+                        } else {
+                            long thinkMs = TimeManager.computeThinkTimeMs(Board.brett, whiteToMove, timeLeft, inc, moveCount);
+                            best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash, thinkMs);
+                            if (best == null) {
+                                // Fallback if no move found (should not happen)
+                                best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash);
+                            }
                         }
                         System.out.println("bestmove " + best.processZug());
                     }
                 } catch (IOException e) {
-                    // If opening book unavailable, fall back to timed search
+                    // If opening book unavailable, choose between fixed-depth low time or timed search
                     long timeLeft = whiteToMove ? wtimeMs : btimeMs;
                     long inc = whiteToMove ? wincMs : bincMs;
-                    long thinkMs = TimeManager.computeThinkTimeMs(Board.brett, whiteToMove, timeLeft, inc, moveCount);
-                    Zug best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash, thinkMs);
-                    if (best == null) {
-                        best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash);
+                    Zug best;
+                    if (timeLeft >= 0 && timeLeft <= 4000) {
+                        best = MoveFinder.searchToDepth(Board.brett, whiteToMove, startHash, 3);
+                        if (best == null) best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash, 200);
+                    } else {
+                        long thinkMs = TimeManager.computeThinkTimeMs(Board.brett, whiteToMove, timeLeft, inc, moveCount);
+                        best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash, thinkMs);
+                        if (best == null) best = MoveFinder.iterativeDeepening(Board.brett, whiteToMove, startHash);
                     }
                     System.out.println("bestmove " + best.processZug());
                 }
