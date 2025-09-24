@@ -7,6 +7,10 @@ public class MoveFinder {
     private static volatile boolean timeUp = false;
     // Set to true if an iteration was aborted due to timeout inside the search
     private static volatile boolean depthAborted = false;
+    
+    // Node counting for debug output
+    private static long nodeCount = 0;
+    private static long searchStartTime = 0;
 
     static final int EXACT = 0;
     static final int LOWERBOUND = 1;
@@ -141,6 +145,7 @@ public class MoveFinder {
 
 
     public static int negamax(Piece [][] board, int depth, int alpha, int beta, boolean isWhite, long hash) {
+        nodeCount++; // Count this node
 
         if (System.currentTimeMillis() >= searchEndTimeMs) {
             timeUp = true;
@@ -223,6 +228,8 @@ public class MoveFinder {
     }
 
     public static int qSearch(Piece [][] board, int alpha, int beta, boolean isWhite, long hash){
+        nodeCount++; // Count this node
+        
         if (System.currentTimeMillis() >= searchEndTimeMs) {
             timeUp = true;
             depthAborted = true;
@@ -433,8 +440,9 @@ public class MoveFinder {
     // Time-limited iterative deepening; search runs until deadline and returns best-so-far
     public static Zug iterativeDeepening (Piece[][] board, boolean isWhite, long hash, long timeLimitMs){
 
-        long now = System.currentTimeMillis();
-        setSearchDeadline(now + Math.max(1, timeLimitMs));
+        searchStartTime = System.currentTimeMillis();
+        setSearchDeadline(searchStartTime + Math.max(1, timeLimitMs));
+        nodeCount = 0; // Reset node counter
 
         ArrayList<Zug> order = possibleMoves(isWhite, board);
         if (order.isEmpty()) return null;
@@ -445,6 +453,9 @@ public class MoveFinder {
         int previousScore = 0;
         boolean hasPreviousScore = false;
 
+        System.out.println("Suche gestartet - Tiefe | Zeit(ms) | Nodes/Sek | Zug     | Eval");
+        System.out.println("---------------------------------------------------------------");
+
         int depth = 1;
         while (depth <= 64) {
             if (System.currentTimeMillis() >= searchEndTimeMs) break;
@@ -452,6 +463,8 @@ public class MoveFinder {
             // Prepare depth
             timeUp = false;
             depthAborted = false;
+            long depthStartTime = System.currentTimeMillis();
+            long nodesAtDepthStart = nodeCount;
             
             SearchResult result;
             
@@ -467,6 +480,13 @@ public class MoveFinder {
                 result = searchWithAspirationWindowRetries(board, depth, isWhite, order, hash, alpha, beta, previousScore);
             }
 
+            // Calculate stats for this depth
+            long depthEndTime = System.currentTimeMillis();
+            long depthTime = Math.max(1, depthEndTime - depthStartTime);
+            long nodesThisDepth = nodeCount - nodesAtDepthStart;
+            long nps = (nodesThisDepth * 1000L) / depthTime;
+            long totalTime = depthEndTime - searchStartTime;
+            
             // Adopt improvements found so far at this depth
             if (!result.moves.isEmpty()) {
                 bestSoFar = result.moves.getFirst();
@@ -477,6 +497,20 @@ public class MoveFinder {
                     previousScore = result.bestScore;
                     hasPreviousScore = true;
                 }
+                
+                // Debug output for completed depth
+                if (!depthAborted && !timeUp) {
+                    String moveStr = String.format("%-7s", bestSoFar.processZug());
+                    String evalStr = result.hasScore ? String.format("%+4d", result.bestScore) : "  ?"; 
+                    System.out.printf("   %2d    | %7d | %9d | %s | %s%n", 
+                        depth, totalTime, nps, moveStr, evalStr);
+                } else {
+                    // Partial depth completed
+                    String moveStr = String.format("%-7s", bestSoFar.processZug());
+                    String evalStr = result.hasScore ? String.format("%+4d", result.bestScore) : "  ?";
+                    System.out.printf("   %2d*   | %7d | %9d | %s | %s (teilweise)%n", 
+                        depth, totalTime, nps, moveStr, evalStr);
+                }
             }
 
             // If depth aborted due to timeout, stop after adopting partial improvements
@@ -486,6 +520,17 @@ public class MoveFinder {
 
             depth++;
         }
+        
+        // Final summary
+        long totalTime = System.currentTimeMillis() - searchStartTime;
+        long totalNps = totalTime > 0 ? (nodeCount * 1000L) / totalTime : 0;
+        System.out.println("---------------------------------------------------------------");
+        System.out.printf("Gesamt: %d Tiefe, %dms, %d Knoten, %d NPS%n", 
+            depth - 1, totalTime, nodeCount, totalNps);
+        System.out.printf("Bester Zug: %s (Eval: %s)%n", 
+            bestSoFar.processZug(), hasPreviousScore ? String.format("%+d", previousScore) : "?");
+        System.out.println();
+        
         return bestSoFar;
     }
     
