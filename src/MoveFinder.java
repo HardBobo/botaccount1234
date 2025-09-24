@@ -22,7 +22,7 @@ public class MoveFinder {
         if (System.currentTimeMillis() >= searchEndTimeMs) { timeUp = true; return orderedMoves; }
 
         // Remove illegal moves
-        orderedMoves.removeIf(zug -> !isLegalMove(zug, board, isWhite));
+        orderedMoves.removeIf(zug -> !Spiel.isLegalMove(zug, board, isWhite));
         if (orderedMoves.isEmpty()) return new ArrayList<>();
 
         // Prefer TT best move at root if available
@@ -31,12 +31,14 @@ public class MoveFinder {
             moveToFront(orderedMoves, rootTT.bestMove);
         }
 
-        // List to hold moves with their scores
+        // List to hold moves with their scores (only fully searched moves)
         ArrayList<ZugScore> scoredMoves = new ArrayList<>();
+        HashSet<Zug> completed = new HashSet<>();
 
         for (Zug zug : orderedMoves) {
-            MoveInfo info = saveMoveInfo(zug, board);
+            if (System.currentTimeMillis() >= searchEndTimeMs) { timeUp = true; break; }
 
+            MoveInfo info = saveMoveInfo(zug, board);
             long oldHash = hash;
 
             hash = doMoveUpdateHash(zug, board, info, hash);
@@ -44,22 +46,41 @@ public class MoveFinder {
             // Negate score to get perspective of current player
             int score = -negamax(board, depth-1, Integer.MIN_VALUE + 1, Integer.MAX_VALUE - 1, !isWhite, hash);
 
+            // Always undo before any potential early return/break
             undoMove(zug, board, info);
             hash = oldHash;
 
+            // If time ran out or depth aborted during this move's search, do not
+            // accept this (potentially misleading) score; stop here and keep
+            // previously completed results only.
+            if (timeUp || depthAborted || System.currentTimeMillis() >= searchEndTimeMs) {
+                timeUp = true;
+                depthAborted = true;
+                break;
+            }
+
             scoredMoves.add(new ZugScore(zug, score));
+            completed.add(zug);
         }
 
-        // Sort moves descending by score (best moves first)
+        // If nothing was fully evaluated at this depth, fall back to previous ordering
+        if (scoredMoves.isEmpty()) {
+            return orderedMoves;
+        }
+
+        // Sort completed moves descending by score (best moves first)
         scoredMoves.sort((a, b) -> Integer.compare(b.score, a.score));
 
-        // sortierte Züge in arraylist einfügen
-        ArrayList<Zug> sortedMoves = new ArrayList<>();
+        // Build new order: completed scored moves first, then remaining moves in prior order
+        ArrayList<Zug> newOrder = new ArrayList<>();
         for (ZugScore zs : scoredMoves) {
-            sortedMoves.add(zs.zug);
+            newOrder.add(zs.zug);
+        }
+        for (Zug z : orderedMoves) {
+            if (!completed.contains(z)) newOrder.add(z);
         }
 
-        return sortedMoves;
+        return newOrder;
     }
 
     // helfer klasse um züge zug sortieren und mit score zu versehen
@@ -99,10 +120,10 @@ public class MoveFinder {
 
         ArrayList<Zug> pseudoLegalMoves = possibleMoves(isWhite, board);
 
-        pseudoLegalMoves.removeIf(zug -> !isLegalMove(zug, board, isWhite));
+        pseudoLegalMoves.removeIf(zug -> !Spiel.isLegalMove(zug, board, isWhite));
 
         if (pseudoLegalMoves.isEmpty()) {
-            if (inCheck(board, isWhite)) {
+            if (Spiel.inCheck(board, isWhite)) {
                 return -(100000 + depth);
             } else {
                 return 0;
@@ -182,10 +203,10 @@ public class MoveFinder {
 
         ArrayList<Zug> moves = possibleMoves(isWhite, board);
 
-        moves.removeIf(zug -> !isLegalMove(zug, board, isWhite));
+        moves.removeIf(zug -> !Spiel.isLegalMove(zug, board, isWhite));
 
         if (moves.isEmpty()) {
-            if (inCheck(board, isWhite)) {
+            if (Spiel.inCheck(board, isWhite)) {
                 return -100000;
             } else {
                 return 0;
@@ -195,7 +216,7 @@ public class MoveFinder {
         ArrayList<Zug> forcingMoves = new ArrayList<>();
 
         for(Zug zug : moves){
-            if(isCapture(board, zug) || promotionQ(zug, board))
+            if(Spiel.isCapture(board, zug) || Spiel.promotionQ(zug, board))
                 forcingMoves.add(zug);
         }
 
@@ -262,12 +283,12 @@ public class MoveFinder {
 
     public static long doMoveUpdateHash(Zug zug, Piece[][] board, MoveInfo info, long hash) {
 
-        boolean [] castleRightsBefore = getCastleRights(board);
+        boolean [] castleRightsBefore = Spiel.getCastleRights(board);
         int epBefore = Zobrist.getEnPassantFile(board, info.movingPiece.isWhite());
 
         doMoveNoHash(zug, board, info);
 
-        boolean [] castleRightsAfter = getCastleRights(board);
+        boolean [] castleRightsAfter = Spiel.getCastleRights(board);
         int epAfter = Zobrist.getEnPassantFile(board, !info.movingPiece.isWhite());;
 
         hash = Zobrist.updateHash(hash, zug, info, board, castleRightsBefore, castleRightsAfter, epBefore, epAfter);
@@ -282,16 +303,16 @@ public class MoveFinder {
 
 //        info.oldHash = currentHash;
 
-        info.enPassantBauerCoords = bauerHasEnPassantFlag(board);
+        info.enPassantBauerCoords = Spiel.bauerHasEnPassantFlag(board);
 
         if(movingPiece instanceof Bauer){
             info.wasEnPassantCapturable = ((Bauer) movingPiece).isEnPassantPossible();
-            if(wasEnPassant(zug, board, targetPiece)){
+            if(Spiel.wasEnPassant(zug, board, targetPiece)){
                 info.wasEnPassant = true;
                 info.capturedPiece = board[zug.startY][zug.endX];
                 info.capEnPassantBauerCoords = new Koordinaten(zug.endX, zug.startY);
             }
-            if(willPromote(zug, board)) {
+            if(Spiel.willPromote(zug, board)) {
                 info.wasPromotion = true;
                 char c = zug.promoteTo;
                 info.promotionPiece = switch (c){
@@ -319,12 +340,12 @@ public class MoveFinder {
         info.squareMovedOnto = targetPiece;
 
         // rochade Infos
-        if (rochade(zug, board)) {
-            if (kurze(zug) && kurzePossible(zug, board)) {
+        if (Spiel.rochade(zug, board)) {
+            if (Spiel.kurze(zug) && Spiel.kurzePossible(zug, board)) {
                 info.rookMoved = true;
                 info.rookStartX = 7;
                 info.rookEndX = 5;
-            } else if (!kurze(zug) && langePossible(zug, board)) {
+            } else if (!Spiel.kurze(zug) && Spiel.langePossible(zug, board)) {
                 info.rookMoved = true;
                 info.rookStartX = 0;
                 info.rookEndX = 3;
@@ -337,13 +358,13 @@ public class MoveFinder {
     }
     public static void undoMove(Zug zug, Piece[][] board, MoveInfo info) {
 
-        resetMovingPiece(zug, board, info);
+        Spiel.resetMovingPiece(zug, board, info);
 
         // geschlagene
-        if(wasEnPassant(zug, board, info.squareMovedOnto)){
-            enPassantResetExe(board, zug);
+        if(Spiel.wasEnPassant(zug, board, info.squareMovedOnto)){
+            Spiel.enPassantResetExe(board, zug);
         } else {
-            resetSquareMovedOnto(board, zug, info);
+            Spiel.resetSquareMovedOnto(board, zug, info);
         }
 
         if(info.enPassantBauerCoords != null){
@@ -387,13 +408,16 @@ public class MoveFinder {
             // System.out.println("Tiefe: " + depth);
             ArrayList<Zug> newOrder = findBestMoves(board, depth, isWhite, order, hash);
 
-            // If depth aborted due to timeout, keep last fully completed result and stop
+            // Adopt improvements found so far at this depth
+            if (!newOrder.isEmpty()) {
+                bestSoFar = newOrder.getFirst();
+                order = newOrder;
+            }
+
+            // If depth aborted due to timeout, stop after adopting partial improvements
             if (depthAborted || timeUp || System.currentTimeMillis() >= searchEndTimeMs) {
                 break;
             }
-
-            if (!newOrder.isEmpty()) bestSoFar = newOrder.getFirst();
-            order = newOrder;
 
             depth++;
         }
@@ -416,231 +440,33 @@ public class MoveFinder {
         if (sorted.isEmpty()) return null;
         return sorted.getFirst();
     }
-    public static boolean wasEnPassant(Zug zug, Piece[][] board, Piece squareMovedOnto){
-        if(board[zug.startY][zug.startX] instanceof Bauer && squareMovedOnto instanceof Empty && Math.abs(zug.endX - zug.startX) == 1){
-            return true;
-        }
-        return false;
-    }
-    public static boolean rochade(Zug zug, Piece [][] board){
-        return board[zug.startY][zug.startX] instanceof Koenig && Math.abs(zug.endX - zug.startX) == 2;
-    }
-    public static boolean kurze(Zug zug){
-        return zug.endX > zug.startX;
-    }
-    public static boolean kurzePossible(Zug zug, Piece [][] board){
-        int startX = zug.startX;
-        int startY = zug.startY;
-        boolean gegner = !board[startY][startX].isWhite();
-        return !Spiel.isSquareAttacked(board, startX, startY, gegner)
-                && !Spiel.isSquareAttacked(board, startX + 1, startY, gegner);
-    }
-    public static void kurzeRochade(Zug zug, Piece [][] board){
-        ((Koenig) board[zug.startY][zug.startX]).setKannRochieren(false);
-        ((Turm) board[zug.startY][7]).setKannRochieren(false);
-        board[zug.endY][5] = board[zug.endY][7];
-        board[zug.endY][7] = new Empty();
-    }
-    public static boolean langePossible(Zug zug, Piece [][] board){
-        int startX = zug.startX;
-        int startY = zug.startY;
-        boolean gegner = !board[startY][startX].isWhite();
-        return !Spiel.isSquareAttacked(board, startX, startY, gegner)
-                && !Spiel.isSquareAttacked(board, startX - 1, startY, gegner);
-    }
-    public static void langeRochade(Zug zug, Piece [][] board){
-        ((Koenig) board[zug.startY][zug.startX]).setKannRochieren(false);
-        ((Turm) board[zug.startY][0]).setKannRochieren(false);
-        board[zug.endY][3] = board[zug.endY][0];
-        board[zug.endY][0] = new Empty();
-    }
-    public static boolean enPassant(Zug zug, Piece [][] board){
-        return board[zug.startY][zug.startX] instanceof Bauer && Math.abs(zug.startX - zug.endX) == 1 &&
-                board[zug.endY][zug.endX] instanceof Empty && board[zug.startY][zug.endX] instanceof Bauer b && b.isEnPassantPossible();
-    }
-    public static void enPassantExe(Zug zug, Piece [][] board){
-        board[zug.startY][zug.endX] = new Empty();
-    }
-    public static void normalTurnExe(Zug zug, Piece [][] board){
-        board[zug.endY][zug.endX] = board[zug.startY][zug.startX];
-        board[zug.startY][zug.startX] = new Empty();
-    }
-    public static boolean promotion(Zug zug, Piece [][] board){
-        if(board[zug.endY][zug.endX] instanceof Bauer){
-            boolean isWhite = board[zug.endY][zug.endX].isWhite();
-            return (isWhite && zug.endY == 0) || (!isWhite && zug.endY == 7);
-        }
-        return false;
-    }
-    public static boolean promotionQ(Zug zug, Piece [][] board){
-        if(board[zug.endY][zug.endX] instanceof Bauer){
-            boolean isWhite = board[zug.endY][zug.endX].isWhite();
-            return (isWhite && zug.endY == 0) || (!isWhite && zug.endY == 7) && zug.promoteTo == 'q';
-        }
-        return false;
-    }
-    public static void promotionExe(Zug zug, Piece [][] board, boolean isWhite){
-        char c = zug.promoteTo;
-        switch (c){
-            case 'q' -> board[zug.endY][zug.endX] = new Dame(isWhite);
-            case 'r' -> board[zug.endY][zug.endX] = new Turm(isWhite);
-            case 'b' -> board[zug.endY][zug.endX] = new Laeufer(isWhite);
-            case 'n' -> board[zug.endY][zug.endX] = new Springer(isWhite);
-        }
-    }
-    public static void resetPawnEnPassant(Piece[][] board){
-        for (int y = 0; y < 8; y++) {
-            for (int x = 0; x < 8; x++) {
-                if (board[y][x] instanceof Bauer) {
-                    ((Bauer) board[y][x]).setEnPassantPossible(false);
-                }
-            }
-        }
-    }
-    public static void resetMovingPiece(Zug zug, Piece [][] board, MoveInfo info){
-        board[zug.startY][zug.startX] = info.movingPiece;
-
-        if(info.movingPiece instanceof Koenig k){
-            k.setKannRochieren(info.wasFirstMove);
-        }
-
-        if(info.movingPiece instanceof Turm t){
-            t.setKannRochieren(info.wasFirstMove);
-        }
-
-        if(info.movingPiece instanceof Bauer b){
-            b.setEnPassantPossible(info.wasEnPassantCapturable);
-        }
-    }
-    public static void resetSquareMovedOnto(Piece [][] board,Zug zug, MoveInfo info){
-        board[zug.endY][zug.endX] = info.squareMovedOnto;
-    }
-    public static boolean bauerDoppel(Zug zug, Piece [][] board){
-        return Math.abs(zug.endY - zug.startY) == 2 && board[zug.startY][zug.startX] instanceof Bauer;
-    }
-    public static void enPassantResetExe(Piece [][] board, Zug zug){
-        board[zug.endY][zug.endX] = new Empty();
-        board[zug.startY][zug.endX] = new Bauer(!board[zug.startY][zug.startX].isWhite());
-        ((Bauer) board[zug.startY][zug.endX]).setEnPassantPossible(true);
-    }
-    public static Koordinaten bauerHasEnPassantFlag(Piece [][] board){
-        Piece p;
-        for(int y = 3; y <= 4; y++){
-            for(int x = 0; x < 8; x++){
-                p = board[y][x];
-                if(p instanceof Bauer b){
-                    if(b.isEnPassantPossible()) {
-                        return new Koordinaten(x, y);
-                    }
-                }
-            }
-        }
-        return null;
-    }
-    public static boolean isLegalMove(Zug zug, Piece[][] board, boolean isWhite) {
-        MoveInfo info = saveMoveInfo(zug, board);
-
-        if (rochade(zug, board)) {
-            if (kurze(zug)) {
-                if (!kurzePossible(zug, board)) {
-                    return false;
-                }
-            } else if (!kurze(zug)) {
-                if (!langePossible(zug, board)) {
-                    return false;
-                }
-            } else {
-                return false;
-            }
-        }
-
-        doMoveNoHash(zug, board, info);
-
-        boolean kingInCheck = inCheck(board, isWhite);
-
-        undoMove(zug, board, info);
-
-        return !kingInCheck;
-    }
-    public static boolean[] getCastleRights(Piece[][] board) {
-        // [whiteShort, whiteLong, blackShort, blackLong]
-        boolean[] rights = new boolean[4];
-
-        // Weiß kurze Rochade (König e1, Turm h1)
-        if (board[7][4] instanceof Koenig k
-                && k.isWhite()
-                && board[7][7] instanceof Turm t
-                && t.isWhite()
-                && k.kannRochieren()
-                && t.kannRochieren()) {
-            rights[0] = true;
-        }
-
-        // Weiß lange Rochade (König e1, Turm a1)
-        if (board[7][4] instanceof Koenig k
-                && k.isWhite()
-                && board[7][0] instanceof Turm t
-                && t.isWhite()
-                && k.kannRochieren()
-                && t.kannRochieren()) {
-            rights[1] = true;
-        }
-
-        // Schwarz kurze Rochade (König e8, Turm h8)
-        if (board[0][4] instanceof Koenig k && !k.isWhite() &&
-                board[0][7] instanceof Turm t && !t.isWhite()
-                && k.kannRochieren()
-                && t.kannRochieren()) {
-            rights[2] = true;
-        }
-
-        // Schwarz lange Rochade (König e8, Turm a8)
-        if (board[0][4] instanceof Koenig k
-                && !k.isWhite()
-                && board[0][0] instanceof Turm t
-                && !t.isWhite()
-                && k.kannRochieren()
-                && t.kannRochieren()) {
-            rights[3] = true;
-        }
-
-        return rights;
-    }
-    public static boolean inCheck(Piece[][] board, boolean isWhite) {
-        Koordinaten coords = Spiel.kingCoordinates(isWhite);
-        return Spiel.isSquareAttacked(board, coords.x, coords.y, !isWhite);
-    }
-    public static boolean isCapture(Piece [][] board, Zug zug) {
-        Piece captured = enPassant(zug, board) ? board[zug.startY][zug.endX] : board[zug.endY][zug.endX];
-        return !(captured instanceof Empty);
-    }
     public static void doMoveNoHash(Zug zug, Piece[][] board, MoveInfo info) {
 
-        boolean bauerDoppelZug = bauerDoppel(zug, board);
+        boolean bauerDoppelZug = Spiel.bauerDoppel(zug, board);
 
-        if (rochade(zug, board)) {
-            if(kurze(zug)) { // kurze Rochade
-                kurzeRochade(zug, board);
+        if (Spiel.rochade(zug, board)) {
+            if(Spiel.kurze(zug)) { // kurze Rochade
+                Spiel.kurzeRochade(zug, board);
             } else{ // lange Rochade
-                langeRochade(zug, board);
+                Spiel.langeRochade(zug, board);
             }
         }
 
         // En-Passant
-        if (enPassant(zug, board)) {
-            enPassantExe(zug, board);
+        if (Spiel.enPassant(zug, board)) {
+            Spiel.enPassantExe(zug, board);
         }
 
         //Normaler Zug
-        normalTurnExe(zug, board);
+        Spiel.normalTurnExe(zug, board);
 
         //Promotion
-        if (promotion(zug, board)) {
-            promotionExe(zug, board, board[zug.endY][zug.endX].isWhite());
+        if (Spiel.promotion(zug, board)) {
+            Spiel.promotionExe(zug, board, board[zug.endY][zug.endX].isWhite());
         }
 
         // en passant flags resetten und dann die neue setzen
-        resetPawnEnPassant(board);
+        Spiel.resetPawnEnPassant(board);
         if (bauerDoppelZug && board[zug.endY][zug.endX] instanceof Bauer b) {
             b.setEnPassantPossible(true);
         }
@@ -654,14 +480,6 @@ public class MoveFinder {
         }
         // Update piece tracker
         Board.pieceTracker.updateMove(zug, info, board);
-    }
-    public static boolean willPromote(Zug zug, Piece[][] board) {
-        // Prüfe die STARTPOSITION
-        if(board[zug.startY][zug.startX] instanceof Bauer b) {
-            boolean isWhite = b.isWhite();
-            return (isWhite && zug.endY == 0) || (!isWhite && zug.endY == 7);
-        }
-        return false;
     }
 
     // Helpers to prioritize TT best move in ordering

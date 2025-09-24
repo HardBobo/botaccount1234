@@ -23,7 +23,7 @@ public class PerftMoveGenTest {
 
         ArrayList<Zug> moves = MoveFinder.possibleMoves(isWhite, board);
 
-        moves.removeIf(zug -> !MoveFinder.isLegalMove(zug, board, isWhite));
+        moves.removeIf(zug -> !Spiel.isLegalMove(zug, board, isWhite));
 
         MoveOrdering.orderMoves(moves, board, isWhite);
 
@@ -53,7 +53,7 @@ public class PerftMoveGenTest {
 
         ArrayList<Zug> moves = MoveFinder.possibleMoves(isWhite, board);
 
-        moves.removeIf(zug -> !MoveFinder.isLegalMove(zug, board, isWhite));
+        moves.removeIf(zug -> !Spiel.isLegalMove(zug, board, isWhite));
 
         MoveOrdering.orderMoves(moves, board, isWhite);
 

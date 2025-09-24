@@ -69,7 +69,7 @@ public class Zobrist {
         }
 
         // Rochaderechte (castleRights = [whiteShort, whiteLong, blackShort, blackLong])
-        boolean [] castleRights = MoveFinder.getCastleRights(board);
+        boolean [] castleRights = Spiel.getCastleRights(board);
         for (int i = 0; i < 4; i++) {
             if (castleRights[i]) {
                 hash ^= Zobrist.getCastleKey(i);

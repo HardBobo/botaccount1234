@@ -12,7 +12,7 @@ public class MoveOrdering {
         Piece movingPiece = board[zug.startY][zug.startX];
         Piece targetPiece;
         int richtung = board[zug.startY][zug.startX].isWhite() ? -1 : 1;
-        if(MoveFinder.enPassant(zug, board)) {
+        if(Spiel.enPassant(zug, board)) {
             targetPiece = board[zug.endY - richtung][zug.endX];
         } else {
             targetPiece = board[zug.endY][zug.endX];
@@ -26,18 +26,18 @@ public class MoveOrdering {
         }
 
         // promotion krass
-        if (movingPiece instanceof Bauer && MoveFinder.promotion(zug, board)) {
+        if (movingPiece instanceof Bauer && Spiel.promotion(zug, board)) {
             score += 800;
         }
 
         // rochade bewerten, wenn king safety von eval erkannt
-        if (MoveFinder.rochade(zug, board)) {
+        if (Spiel.rochade(zug, board)) {
             score += 50;
 
         }
 
          //schachzug krasser
-         if (MoveFinder.inCheck(board, !isWhite)) {
+         if (Spiel.inCheck(board, !isWhite)) {
              score += 20;
          }
 
