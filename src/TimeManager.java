@@ -2,6 +2,10 @@ import java.util.ArrayList;
 
 public class TimeManager {
     public static long computeThinkTimeMs(long timeLeftMs, long incMs) {
-        return Math.max((long) (timeLeftMs/20 + incMs * 0.8), 100);
+        if (incMs != 0) {
+            return Math.max((long) (timeLeftMs/30 + incMs * 0.7), 100);
+        } else {
+            return timeLeftMs/35;
+        }
     }
 }

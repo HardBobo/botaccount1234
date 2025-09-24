@@ -519,10 +519,43 @@ public class MoveFinder {
 	
 	    MoveOrdering.orderMoves(order, board, isWhite);
 
-        ArrayList<Zug> sorted = findBestMoves(board, depth, isWhite, order, hash);
-        if (sorted.isEmpty()) return null;
-        return sorted.getFirst();
+        int prevScore = 0;
+        boolean hasPreviousScore = false;
+
+        Zug bestSoFar = order.getFirst();
+
+        for(int i = 0; i < depth; i++){
+
+            SearchResult result;
+
+            if (depth == 1 || !hasPreviousScore) {
+                // First depth or no previous score - use full window
+                result = findBestMovesWithAspirationWindow(board, depth, isWhite, order, hash, Integer.MIN_VALUE + 1, Integer.MAX_VALUE - 1);
+            } else {
+                // Use aspiration window based on previous score
+                final int ASPIRATION_WINDOW = 50;
+                int alpha = prevScore - ASPIRATION_WINDOW;
+                int beta = prevScore + ASPIRATION_WINDOW;
+
+                result = searchWithAspirationWindowRetries(board, depth, isWhite, order, hash, alpha, beta, prevScore);
+            }
+
+            // Adopt improvements found so far at this depth
+            if (!result.moves.isEmpty()) {
+                bestSoFar = result.moves.getFirst();
+                order = result.moves;
+
+                // Update previous score for next iteration if we have a valid score
+                if (result.hasScore) {
+                    prevScore = result.bestScore;
+                    hasPreviousScore = true;
+                }
+            }
+        }
+        return bestSoFar;
     }
+
+
     public static void doMoveNoHash(Zug zug, Piece[][] board, MoveInfo info) {
 
         boolean bauerDoppelZug = Spiel.bauerDoppel(zug, board);
