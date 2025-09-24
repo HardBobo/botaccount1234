@@ -59,7 +59,6 @@ java -cp "out:path/to/json-20240303.jar" OpeningDictionary
 
 **Lichess Integration**  
 - `LichessBotStream.java`: **Main entry point** - handles Lichess API streaming, challenge acceptance, and game state management
-- `BotEngine.java`: Simplified engine interface for external use
 
 **Piece System**
 - `Piece.java`: Abstract base class for all chess pieces

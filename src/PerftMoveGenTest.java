@@ -1,8 +1,5 @@
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 
 public class PerftMoveGenTest {
     private static long startTime = 0;
@@ -34,7 +31,7 @@ public class PerftMoveGenTest {
         for (Zug zug : moves) {
             MoveInfo info = MoveFinder.saveMoveInfo(zug, board);
             
-            MoveFinder.doMove(zug, board, info, hash);
+            MoveFinder.doMoveUpdateHash(zug, board, info, hash);
 
             int nodes = perft(board, depth - 1, !isWhite, hash);
             System.out.println(zug.processZug() + ": " + nodes);
@@ -63,7 +60,7 @@ public class PerftMoveGenTest {
         int count = 0;
         for (Zug zug : moves) {
             MoveInfo info = MoveFinder.saveMoveInfo(zug, board);
-            MoveFinder.doMove(zug, board, info, hash);
+            MoveFinder.doMoveUpdateHash(zug, board, info, hash);
 
             count += perft(board, depth - 1, !isWhite, hash);
             MoveFinder.undoMove(zug, board, info);

@@ -14,11 +14,9 @@ public class Spiel {
         // Use PieceTracker for efficient king lookup instead of scanning the entire board
         return Board.pieceTracker.getKing(white);
     }
-
     public static boolean imBrett(int x, int y) {
         return x >= 0 && x < 8 && y >= 0 && y < 8;
     }
-
     public static boolean isSquareAttacked(Piece[][] board, int x, int y, boolean enemyIsWhite) {
         for (int row = 0; row < 8; row++) {
             for (int col = 0; col < 8; col++) {
@@ -88,5 +86,11 @@ public class Spiel {
             y += dy;
         }
         return true;
+    }
+    public static void newGame(){
+        Board.setupBoard(Board.brett);
+        MoveFinder.transpositionTable.clear();
+        Zobrist.initZobrist();
+        LichessBotStream.startHash = Zobrist.computeHash(Board.brett, true);
     }
 }

@@ -32,7 +32,7 @@ public class LichessBotStream {
     private static long whiteIncMs = 0;
     private static long blackIncMs = 0;
 
-    public static void main(String[] args) throws IOException, InterruptedException {
+    public static void main(String[] args) {
         // Validate configuration before starting
         config.validateConfiguration();
         
@@ -177,17 +177,9 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                                     } catch (Exception e) {
                                         System.err.println("Fehler beim Lesen der Zeitkontrolle aus gameFull: " + e.getMessage());
                                     }
-
-                                    Board.setupBoard(Board.brett);
-                                    MoveFinder.transpositionTable.clear();
-                                    Zobrist.initZobrist();
-                                    startHash = Zobrist.computeHash(Board.brett, true);
+                                    Spiel.newGame();
                                     if(isWhite) {
-                                        Zug zug = Objects.requireNonNull(OpeningDictionary.getNextOpeningMove(""));
-                                        playMove(gameId, zug.processZug());
-                                        MoveInfo info = MoveFinder.saveMoveInfo(zug, Board.brett);
-                                        startHash = MoveFinder.doMove(zug, Board.brett, info, startHash);
-                                        lastProcessedMoveCount++;
+                                        doFirstMove(gameId);
                                     }
                                 } else if ("gameState".equals(type)) { // normaler gamestate
                                     // Zeit pro Zug (Millisekunden) aus gameState (wtime/btime), ggf. winc/binc
@@ -204,80 +196,48 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                                             || event.getString("status").equals("draw")
                                             || event.getString("status").equals("outoftime")
                                             || event.getString("status").equals("aborted")){
-                                        // finish statement statt gamefinish
-                                        //System.out.println("SCHACHMATT");
-                                        lastProcessedMoveCount = 0;
-                                        moves = "";
-                                        moveList = new String [0];
-                                        // Zeitkontrolle & Zeiten zurücksetzen
-                                        baseTimeSeconds = -1;
-                                        incrementSeconds = 0;
-                                        pendingBaseTimeSeconds = null;
-                                        pendingIncrementSeconds = null;
-                                        whiteTimeMs = -1;
-                                        blackTimeMs = -1;
 
-                                        Board.setupBoard(Board.brett);
-                                        MoveFinder.transpositionTable.clear();
-                                        Zobrist.initZobrist();
-                                        startHash = Zobrist.computeHash(Board.brett, true);
+                                        resetTimeControl();
+                                        Spiel.newGame();
                                     }
                                     else { // normale züge
-                                        moves = event.getString("moves"); // bisherige Züge geuptdated
-                                        moveList = moves.isEmpty() ? new String[0] : moves.split(" "); // array auch
-                                        moveCount = moveList.length; // auch anzahl
-                                        if (moveCount > lastProcessedMoveCount) { // stellungsupdate
-                                            Zug zug;
-                                            for (int i = lastProcessedMoveCount; i < moveList.length; i++) {
-                                                //System.out.println("Neuer Zug erkannt: " + moveList[i]);
-                                                zug = new Zug(moveList[i]);
-                                                MoveInfo info = MoveFinder.saveMoveInfo(zug, Board.brett);
-                                                startHash = MoveFinder.doMove(new Zug(moveList[i]), Board.brett, info, startHash);
-                                            }
-                                            lastProcessedMoveCount = moveList.length;
-                                        }
+
+                                        syncLichessToBoard(event);
+
                                         if (isWhite) {
                                             if (isMyTurn(moves, "white")) {
-                                                Zug zug = OpeningDictionary.getNextOpeningMove(moves);
-                                                if(zug != null){
-                                                    playMove(gameId, zug.processZug());
+                                                if(playOpeningMove(gameId)){
+
                                                 }
                                                 else {
                                                     long timeLeft = whiteTimeMs; // tracked from stream in ms
                                                     long incMs = whiteIncMs > 0 ? whiteIncMs : Math.max(0, incrementSeconds) * 1000L;
-                                                    System.out.println("[TC] White move: timeLeft=" + timeLeft + "ms, incMs=" + incMs);
+
                                                     Zug best;
-                                                    if (timeLeft >= 0 && timeLeft <= 4000) {
-                                                        best = MoveFinder.searchToDepth(Board.brett, true, startHash, 3);
-                                                        if (best == null) best = MoveFinder.iterativeDeepening(Board.brett, true, startHash, 200);
+                                                    if (timeLeft >= 0 && timeLeft <= 4000 && incMs <= 500) {
+                                                        best = panicBest();
                                                     } else {
-                                                        long thinkMs = TimeManager.computeThinkTimeMs(Board.brett, true, timeLeft, incMs, moveCount);
-                                                        thinkMs = Math.max(5, thinkMs - 20); // safety margin
+                                                        long thinkMs = TimeManager.computeThinkTimeMs(timeLeft, incMs);
                                                         best = MoveFinder.iterativeDeepening(Board.brett, true, startHash, thinkMs);
-                                                        if (best == null) best = MoveFinder.iterativeDeepening(Board.brett, true, startHash);
                                                     }
                                                     playMove(gameId, best.processZug());
                                                 }
                                             }
                                         } else {
                                             if (isMyTurn(moves, "black")) {
-                                                Zug zug = OpeningDictionary.getNextOpeningMove(moves);
-                                                if(zug != null){
-                                                    playMove(gameId, zug.processZug());
+                                                if(playOpeningMove(gameId)){
+
                                                 }
                                                 else {
                                                     long timeLeft = blackTimeMs; // tracked from stream in ms
                                                     long incMs = blackIncMs > 0 ? blackIncMs : Math.max(0, incrementSeconds) * 1000L;
-                                                    System.out.println("[TC] Black move: timeLeft=" + timeLeft + "ms, incMs=" + incMs);
+
                                                     Zug best;
-                                                    if (timeLeft >= 0 && timeLeft <= 4000) {
-                                                        best = MoveFinder.searchToDepth(Board.brett, false, startHash, 3);
-                                                        if (best == null) best = MoveFinder.iterativeDeepening(Board.brett, false, startHash, 200);
+                                                    if (timeLeft >= 0 && timeLeft <= 4000 && incMs <= 500) {
+                                                        best = panicBest();
                                                     } else {
-                                                        long thinkMs = TimeManager.computeThinkTimeMs(Board.brett, false, timeLeft, incMs, moveCount);
-                                                        thinkMs = Math.max(5, thinkMs - 20); // safety margin
+                                                        long thinkMs = TimeManager.computeThinkTimeMs(timeLeft, incMs);
                                                         best = MoveFinder.iterativeDeepening(Board.brett, false, startHash, thinkMs);
-                                                        if (best == null) best = MoveFinder.iterativeDeepening(Board.brett, false, startHash);
                                                     }
                                                     playMove(gameId, best.processZug());
                                                 }
@@ -313,6 +273,7 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                     }
                 });
     }
+
     public static boolean isMyTurn(String moves, String myColor) { // selbsterklärend
         if (moves == null || moves.isEmpty()) {
             return "white".equals(myColor);
@@ -322,23 +283,6 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                 || ("black".equals(myColor) && moveCount % 2 == 1);
     }
 
-    // Getter für Zeitkontrolle
-    public static int getBaseTimeSeconds() {
-        return baseTimeSeconds;
-    }
-
-    public static int getIncrementSeconds() {
-        return incrementSeconds;
-    }
-
-    // Getter für verbleibende Zeiten in Millisekunden
-    public static long getWhiteTimeMs() {
-        return whiteTimeMs;
-    }
-    public static long getBlackTimeMs() {
-        return blackTimeMs;
-    }
-
     // Heuristik: Falls times < 1000 aber wir erwarten ms, konvertiere Sekunden → Millisekunden
     private static long normalizeMs(long v) {
         if (v > 0 && v < 1000) {
@@ -346,5 +290,54 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
             if (baseTimeSeconds >= 5) return v * 1000L;
         }
         return v;
+    }
+
+    private static void doFirstMove(String gameId) throws IOException {
+        Zug zug = Objects.requireNonNull(OpeningDictionary.getNextOpeningMove(""));
+        playMove(gameId, zug.processZug());
+        MoveInfo info = MoveFinder.saveMoveInfo(zug, Board.brett);
+        startHash = MoveFinder.doMoveUpdateHash(zug, Board.brett, info, startHash);
+        lastProcessedMoveCount++;
+    }
+
+    private static void resetTimeControl(){
+        lastProcessedMoveCount = 0;
+        moves = "";
+        moveList = new String [0];
+        baseTimeSeconds = -1;
+        incrementSeconds = 0;
+        pendingBaseTimeSeconds = null;
+        pendingIncrementSeconds = null;
+        whiteTimeMs = -1;
+        blackTimeMs = -1;
+    }
+
+    private static void syncLichessToBoard(JSONObject event){
+        moves = event.getString("moves"); // bisherige Züge geuptdated
+        moveList = moves.isEmpty() ? new String[0] : moves.split(" "); // array auch
+        moveCount = moveList.length; // auch anzahl
+        if (moveCount > lastProcessedMoveCount) { // stellungsupdate
+            Zug zug;
+            for (int i = lastProcessedMoveCount; i < moveList.length; i++) {
+                //System.out.println("Neuer Zug erkannt: " + moveList[i]);
+                zug = new Zug(moveList[i]);
+                MoveInfo info = MoveFinder.saveMoveInfo(zug, Board.brett);
+                startHash = MoveFinder.doMoveUpdateHash(new Zug(moveList[i]), Board.brett, info, startHash);
+            }
+            lastProcessedMoveCount = moveList.length;
+        }
+    }
+
+    private static boolean playOpeningMove(String gameId) throws IOException {
+        Zug zug = OpeningDictionary.getNextOpeningMove(moves);
+        if(zug != null){
+            playMove(gameId, zug.processZug());
+            return true;
+        }
+        return false;
+    }
+
+    private static Zug panicBest(){
+        return MoveFinder.searchToDepth(Board.brett, true, startHash, 2);
     }
 }

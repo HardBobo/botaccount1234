@@ -1,8 +1,6 @@
 import java.util.*;
 
 public class MoveFinder {
-    private static long nodes = 0;     // Knoten-Zähler
-    private static long startTime = 0; // Startzeit für Messung
 
     // Time control for search
     private static volatile long searchEndTimeMs = Long.MAX_VALUE;
@@ -16,17 +14,11 @@ public class MoveFinder {
 
     static Map<Long, TTEntry> transpositionTable = new HashMap<>();
 
-    private static long ttLookups = 0;  // total times you query the TT
-    private static long ttHits = 0;     // total times the TT actually returned a valid result
-
     public static ArrayList<Zug> possibleMoves(boolean white, Piece[][] board) {
-        // Use PieceTracker for efficient move generation instead of scanning the entire board
         return Board.pieceTracker.generateMoves(white, board);
     }
 
     public static ArrayList<Zug> findBestMoves(Piece[][] board, int depth, boolean isWhite, ArrayList<Zug> orderedMoves, long hash) {
-        nodes = 0;
-        startTime = System.currentTimeMillis();
         if (System.currentTimeMillis() >= searchEndTimeMs) { timeUp = true; return orderedMoves; }
 
         // Remove illegal moves
@@ -47,7 +39,7 @@ public class MoveFinder {
 
             long oldHash = hash;
 
-            hash = doMove(zug, board, info, hash);
+            hash = doMoveUpdateHash(zug, board, info, hash);
 
             // Negate score to get perspective of current player
             int score = -negamax(board, depth-1, Integer.MIN_VALUE + 1, Integer.MAX_VALUE - 1, !isWhite, hash);
@@ -61,21 +53,11 @@ public class MoveFinder {
         // Sort moves descending by score (best moves first)
         scoredMoves.sort((a, b) -> Integer.compare(b.score, a.score));
 
-        long elapsed = System.currentTimeMillis() - startTime;
-        double nps = (nodes * 1000.0) / (elapsed + 1);
-//        System.out.println("Nodes: " + nodes);
-//        System.out.println("Time elapsed: " + elapsed + " ms");
-        System.out.println("Speed: " + (long) nps + " nodes/s");
-
         // sortierte Züge in arraylist einfügen
         ArrayList<Zug> sortedMoves = new ArrayList<>();
         for (ZugScore zs : scoredMoves) {
             sortedMoves.add(zs.zug);
         }
-
-//        for (ZugScore zs : scoredMoves.reversed()) {
-//            System.out.println(zs.zug.processZug() + " " + zs.score);
-//        }
 
         return sortedMoves;
     }
@@ -100,16 +82,12 @@ public class MoveFinder {
             return Evaluation.evaluation(board, isWhite);
         }
 
-        nodes++;
-        ttLookups++;
-
-
         int alphaOrig = alpha;
 
         TTEntry entry = transpositionTable.get(hash);
 
         if (entry != null && entry.isValid && entry.depth >= depth) {
-            if (ttLookup(alpha, beta, entry)) { ttHits++; return entry.value;}
+            if (ttLookup(alpha, beta, entry)) {return entry.value;}
         }
 
         if (depth == 0){
@@ -145,7 +123,7 @@ public class MoveFinder {
             MoveInfo info = saveMoveInfo(zug, board);
             long oldHash = hash;
 
-            hash = doMove(zug, board, info, hash);
+            hash = doMoveUpdateHash(zug, board, info, hash);
 
             int child = -negamax(board, depth - 1, -beta, -alpha, !isWhite, hash);
             if (child > value) {
@@ -184,13 +162,11 @@ public class MoveFinder {
             depthAborted = true;
             return Evaluation.evaluation(board, isWhite);
         }
-        nodes++;
-        ttLookups++;
 
 
         TTEntry entry = transpositionTable.get(hash);
         if (entry != null && entry.isValid) {
-            if (ttLookup(alpha, beta, entry)) { ttHits++; return entry.value;}
+            if (ttLookup(alpha, beta, entry)) {return entry.value;}
         }
 
         int alphaOrig = alpha;
@@ -240,7 +216,7 @@ public class MoveFinder {
 
             long oldHash = hash;
 
-            hash = doMove(zug, board, info, hash);
+            hash = doMoveUpdateHash(zug, board, info, hash);
 
             int score = -qSearch(board, -beta, -alpha, !isWhite, hash);
 
@@ -284,53 +260,15 @@ public class MoveFinder {
     }
 
 
-    public static long doMove(Zug zug, Piece[][] board, MoveInfo info, long hash) {
+    public static long doMoveUpdateHash(Zug zug, Piece[][] board, MoveInfo info, long hash) {
 
         boolean [] castleRightsBefore = getCastleRights(board);
         int epBefore = Zobrist.getEnPassantFile(board, info.movingPiece.isWhite());
 
-        boolean bauerDoppelZug = bauerDoppel(zug, board);
-
-        if (rochade(zug, board)) {
-            if(kurze(zug)) { // kurze Rochade
-                kurzeRochade(zug, board);
-            } else{ // lange Rochade
-                langeRochade(zug, board);
-            }
-        }
-
-        // En-Passant
-        if (enPassant(zug, board)) {
-            enPassantExe(zug, board);
-        }
-
-        //Normaler Zug
-        normalTurnExe(zug, board);
-
-        //Promotion
-        if (promotion(zug, board)) {
-            promotionExe(zug, board, board[zug.endY][zug.endX].isWhite());
-        }
-
-        // en passant flags resetten und dann die neue setzen
-        resetPawnEnPassant(board);
-        if (bauerDoppelZug && board[zug.endY][zug.endX] instanceof Bauer b) {
-            b.setEnPassantPossible(true);
-        }
-
-        // erster zug flags
-        if (board[zug.endY][zug.endX] instanceof Turm t) {
-            t.setKannRochieren(false);
-        }
-        if (board[zug.endY][zug.endX] instanceof Koenig k) {
-            k.setKannRochieren(false);
-        }
+        doMoveNoHash(zug, board, info);
 
         boolean [] castleRightsAfter = getCastleRights(board);
         int epAfter = Zobrist.getEnPassantFile(board, !info.movingPiece.isWhite());;
-
-        // Update piece tracker
-        Board.pieceTracker.updateMove(zug, info, board);
 
         hash = Zobrist.updateHash(hash, zug, info, board, castleRightsBefore, castleRightsAfter, epBefore, epAfter);
         
@@ -426,35 +364,18 @@ public class MoveFinder {
         Board.pieceTracker.undoMove(zug, info, board);
     }
 
-    public static Zug iterativeDeepening (Piece[][] board, boolean isWhite, long hash){
-        // Default: fixed small depth for compatibility
-        setSearchDeadline(Long.MAX_VALUE);
-        ArrayList<Zug> order = possibleMoves(isWhite, board);
-        if (order.isEmpty()) return null;
-
-	    MoveOrdering.orderMoves(order, board, isWhite);
-
-        Zug bestSoFar = order.getFirst();
-
-        for(int i = 1; i<6; i++) {
-            if (System.currentTimeMillis() >= searchEndTimeMs) break;
-            System.out.println("Tiefe: " + i);
-
-            order = (findBestMoves(board, i, isWhite,order, hash));
-            if (!order.isEmpty()) bestSoFar = order.getFirst();
-            System.out.println("Bester Zug bisher: " + bestSoFar.processZug());
-
-        }
-
-        return bestSoFar;
-    }
-
     // Time-limited iterative deepening; search runs until deadline and returns best-so-far
     public static Zug iterativeDeepening (Piece[][] board, boolean isWhite, long hash, long timeLimitMs){
+
         long now = System.currentTimeMillis();
         setSearchDeadline(now + Math.max(1, timeLimitMs));
+
+
         ArrayList<Zug> order = possibleMoves(isWhite, board);
         if (order.isEmpty()) return null;
+
+        MoveOrdering.orderMoves(order, board, isWhite);
+
         Zug bestSoFar = order.getFirst();
 
         int depth = 1;
@@ -474,9 +395,6 @@ public class MoveFinder {
             if (!newOrder.isEmpty()) bestSoFar = newOrder.getFirst();
             order = newOrder;
 
-            // Reset for next depth stats
-            ttHits = 0;
-            ttLookups = 0;
             depth++;
         }
         return bestSoFar;
@@ -494,9 +412,9 @@ public class MoveFinder {
 	
 	    MoveOrdering.orderMoves(order, board, isWhite);
 
-        ArrayList<Zug> sorted = findBestMoves(board, Math.max(1, depth), isWhite, order, hash);
+        ArrayList<Zug> sorted = findBestMoves(board, depth, isWhite, order, hash);
         if (sorted.isEmpty()) return null;
-        return sorted.get(0);
+        return sorted.getFirst();
     }
     public static boolean wasEnPassant(Zug zug, Piece[][] board, Piece squareMovedOnto){
         if(board[zug.startY][zug.startX] instanceof Bauer && squareMovedOnto instanceof Empty && Math.abs(zug.endX - zug.startX) == 1){
