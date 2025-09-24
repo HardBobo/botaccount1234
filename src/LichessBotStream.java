@@ -215,7 +215,10 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
 
                                                     Zug best;
                                                     if (timeLeft >= 0 && timeLeft <= 4000 && incMs <= 1000) {
-                                                        best = panicBest(isWhite);
+                                                        if(timeLeft <= 2000)
+                                                            best = ultraPanicBest(isWhite);
+                                                        else
+                                                            best = panicBest(isWhite);
                                                     } else {
                                                         long thinkMs = TimeManager.computeThinkTimeMs(timeLeft, incMs);
                                                         best = MoveFinder.iterativeDeepening(Board.brett, true, startHash, thinkMs);
@@ -339,5 +342,8 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
 
     private static Zug panicBest(boolean whiteToMove){
         return MoveFinder.searchToDepth(Board.brett, whiteToMove, startHash, 2);
+    }
+    private static Zug ultraPanicBest(boolean whiteToMove){
+        return MoveFinder.searchToDepth(Board.brett, whiteToMove, startHash, 1);
     }
 }
