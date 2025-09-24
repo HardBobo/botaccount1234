@@ -19,11 +19,16 @@ public class MoveFinder {
     }
 
     public static ArrayList<Zug> findBestMoves(Piece[][] board, int depth, boolean isWhite, ArrayList<Zug> orderedMoves, long hash) {
-        if (System.currentTimeMillis() >= searchEndTimeMs) { timeUp = true; return orderedMoves; }
+        SearchResult result = findBestMovesWithAspirationWindow(board, depth, isWhite, orderedMoves, hash, Integer.MIN_VALUE + 1, Integer.MAX_VALUE - 1);
+        return result.moves;
+    }
+    
+    public static SearchResult findBestMovesWithAspirationWindow(Piece[][] board, int depth, boolean isWhite, ArrayList<Zug> orderedMoves, long hash, int alpha, int beta) {
+        if (System.currentTimeMillis() >= searchEndTimeMs) { timeUp = true; return new SearchResult(orderedMoves, 0, false); }
 
         // Remove illegal moves
         orderedMoves.removeIf(zug -> !Spiel.isLegalMove(zug, board, isWhite));
-        if (orderedMoves.isEmpty()) return new ArrayList<>();
+        if (orderedMoves.isEmpty()) return new SearchResult(new ArrayList<>(), 0, false);
 
         // Prefer TT best move at root if available
         TTEntry rootTT = transpositionTable.get(hash);
@@ -34,6 +39,10 @@ public class MoveFinder {
         // List to hold moves with their scores (only fully searched moves)
         ArrayList<ZugScore> scoredMoves = new ArrayList<>();
         HashSet<Zug> completed = new HashSet<>();
+        
+        int bestScore = Integer.MIN_VALUE;
+        boolean failedLow = false;
+        boolean failedHigh = false;
 
         for (Zug zug : orderedMoves) {
             if (System.currentTimeMillis() >= searchEndTimeMs) { timeUp = true; break; }
@@ -43,8 +52,8 @@ public class MoveFinder {
 
             hash = doMoveUpdateHash(zug, board, info, hash);
 
-            // Negate score to get perspective of current player
-            int score = -negamax(board, depth-1, Integer.MIN_VALUE + 1, Integer.MAX_VALUE - 1, !isWhite, hash);
+            // Search with aspiration window
+            int score = -negamax(board, depth-1, -beta, -alpha, !isWhite, hash);
 
             // Always undo before any potential early return/break
             undoMove(zug, board, info);
@@ -61,11 +70,32 @@ public class MoveFinder {
 
             scoredMoves.add(new ZugScore(zug, score));
             completed.add(zug);
+            
+            // Track best score and check for aspiration window failures
+            if (score > bestScore) {
+                bestScore = score;
+            }
+            
+            // Check for fail-high (score >= beta)
+            if (score >= beta) {
+                failedHigh = true;
+                break; // This move is too good, opponent won't allow it
+            }
+            
+            // Update alpha for next move
+            if (score > alpha) {
+                alpha = score;
+            }
+        }
+        
+        // Check for fail-low (bestScore <= original alpha)
+        if (bestScore <= alpha && !scoredMoves.isEmpty()) {
+            failedLow = true;
         }
 
         // If nothing was fully evaluated at this depth, fall back to previous ordering
         if (scoredMoves.isEmpty()) {
-            return orderedMoves;
+            return new SearchResult(orderedMoves, 0, false);
         }
 
         // Sort completed moves descending by score (best moves first)
@@ -80,7 +110,9 @@ public class MoveFinder {
             if (!completed.contains(z)) newOrder.add(z);
         }
 
-        return newOrder;
+        // Return the best score from the sorted moves
+        int actualBestScore = scoredMoves.getFirst().score;
+        return new SearchResult(newOrder, actualBestScore, true);
     }
 
     // helfer klasse um züge zug sortieren und mit score zu versehen
@@ -91,6 +123,19 @@ public class MoveFinder {
         ZugScore(Zug zug, int score) {
             this.zug = zug;
             this.score = score;
+        }
+    }
+    
+    // Result class to return both moves and best score
+    static class SearchResult {
+        ArrayList<Zug> moves;
+        int bestScore;
+        boolean hasScore; // true if we have a valid score
+        
+        SearchResult(ArrayList<Zug> moves, int bestScore, boolean hasScore) {
+            this.moves = moves;
+            this.bestScore = bestScore;
+            this.hasScore = hasScore;
         }
     }
 
@@ -391,27 +436,47 @@ public class MoveFinder {
         long now = System.currentTimeMillis();
         setSearchDeadline(now + Math.max(1, timeLimitMs));
 
-
         ArrayList<Zug> order = possibleMoves(isWhite, board);
         if (order.isEmpty()) return null;
 
         MoveOrdering.orderMoves(order, board, isWhite);
 
         Zug bestSoFar = order.getFirst();
+        int previousScore = 0;
+        boolean hasPreviousScore = false;
 
         int depth = 1;
         while (depth <= 64) {
             if (System.currentTimeMillis() >= searchEndTimeMs) break;
+            
             // Prepare depth
             timeUp = false;
             depthAborted = false;
-            // System.out.println("Tiefe: " + depth);
-            ArrayList<Zug> newOrder = findBestMoves(board, depth, isWhite, order, hash);
+            
+            SearchResult result;
+            
+            if (depth == 1 || !hasPreviousScore) {
+                // First depth or no previous score - use full window
+                result = findBestMovesWithAspirationWindow(board, depth, isWhite, order, hash, Integer.MIN_VALUE + 1, Integer.MAX_VALUE - 1);
+            } else {
+                // Use aspiration window based on previous score
+                final int ASPIRATION_WINDOW = 50;
+                int alpha = previousScore - ASPIRATION_WINDOW;
+                int beta = previousScore + ASPIRATION_WINDOW;
+                
+                result = searchWithAspirationWindowRetries(board, depth, isWhite, order, hash, alpha, beta, previousScore);
+            }
 
             // Adopt improvements found so far at this depth
-            if (!newOrder.isEmpty()) {
-                bestSoFar = newOrder.getFirst();
-                order = newOrder;
+            if (!result.moves.isEmpty()) {
+                bestSoFar = result.moves.getFirst();
+                order = result.moves;
+                
+                // Update previous score for next iteration if we have a valid score
+                if (result.hasScore) {
+                    previousScore = result.bestScore;
+                    hasPreviousScore = true;
+                }
             }
 
             // If depth aborted due to timeout, stop after adopting partial improvements
@@ -422,6 +487,24 @@ public class MoveFinder {
             depth++;
         }
         return bestSoFar;
+    }
+    
+    // Helper method to handle aspiration window retries on fail-high/fail-low
+    private static SearchResult searchWithAspirationWindowRetries(Piece[][] board, int depth, boolean isWhite, ArrayList<Zug> order, long hash, int alpha, int beta, int expectedScore) {
+        SearchResult result = findBestMovesWithAspirationWindow(board, depth, isWhite, order, hash, alpha, beta);
+        
+        // If we have a score and it's outside our aspiration window, we need to re-search with wider window
+        if (result.hasScore) {
+            if (result.bestScore <= alpha) {
+                // Fail low - research with lowered alpha
+                return findBestMovesWithAspirationWindow(board, depth, isWhite, order, hash, Integer.MIN_VALUE + 1, beta);
+            } else if (result.bestScore >= beta) {
+                // Fail high - research with raised beta  
+                return findBestMovesWithAspirationWindow(board, depth, isWhite, order, hash, alpha, Integer.MAX_VALUE - 1);
+            }
+        }
+        
+        return result;
     }
     public static void setSearchDeadline(long deadlineMs) {
         searchEndTimeMs = deadlineMs;
