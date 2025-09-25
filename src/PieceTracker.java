@@ -8,14 +8,14 @@ public class PieceTracker {
     // Lists of piece positions for each piece type and color
     private final List<Koordinaten> whitePawns = new ArrayList<>();
     private final List<Koordinaten> blackPawns = new ArrayList<>();
-    private final List<Koordinaten> whiteKnights = new ArrayList<>();
-    private final List<Koordinaten> blackKnights = new ArrayList<>();
-    private final List<Koordinaten> whiteBishops = new ArrayList<>();
-    private final List<Koordinaten> blackBishops = new ArrayList<>();
-    private final List<Koordinaten> whiteRooks = new ArrayList<>();
-    private final List<Koordinaten> blackRooks = new ArrayList<>();
-    private final List<Koordinaten> whiteQueens = new ArrayList<>();
-    private final List<Koordinaten> blackQueens = new ArrayList<>();
+    private static final List<Koordinaten> whiteKnights = new ArrayList<>();
+    private static final List<Koordinaten> blackKnights = new ArrayList<>();
+    private static final List<Koordinaten> whiteBishops = new ArrayList<>();
+    private static final List<Koordinaten> blackBishops = new ArrayList<>();
+    private static final List<Koordinaten> whiteRooks = new ArrayList<>();
+    private static final List<Koordinaten> blackRooks = new ArrayList<>();
+    private static final List<Koordinaten> whiteQueens = new ArrayList<>();
+    private static final List<Koordinaten> blackQueens = new ArrayList<>();
     private Koordinaten whiteKing = null;
     private Koordinaten blackKing = null;
     
@@ -162,8 +162,6 @@ public class PieceTracker {
      */
     private void removePiece(Piece piece, int x, int y) {
         if (piece instanceof Empty) return;
-        
-        Koordinaten pos = new Koordinaten(x, y);
         boolean isWhite = piece.isWhite();
         
         // Remove from color-specific list
@@ -225,19 +223,19 @@ public class PieceTracker {
         return white ? whitePawns : blackPawns;
     }
     
-    public List<Koordinaten> getKnights(boolean white) {
+    public static List<Koordinaten> getKnights(boolean white) {
         return white ? whiteKnights : blackKnights;
     }
     
-    public List<Koordinaten> getBishops(boolean white) {
+    public static List<Koordinaten> getBishops(boolean white) {
         return white ? whiteBishops : blackBishops;
     }
     
-    public List<Koordinaten> getRooks(boolean white) {
+    public static List<Koordinaten> getRooks(boolean white) {
         return white ? whiteRooks : blackRooks;
     }
     
-    public List<Koordinaten> getQueens(boolean white) {
+    public static List<Koordinaten> getQueens(boolean white) {
         return white ? whiteQueens : blackQueens;
     }
     
@@ -263,24 +261,11 @@ public class PieceTracker {
         
         return moves;
     }
-    
-    /**
-     * Get piece count for game phase calculation
-     */
-    public int getPieceCount(boolean white) {
-        return getAllPieces(white).size();
-    }
-    
-    /**
-     * Check if position has specific piece type (for quick evaluation)
-     */
-    public boolean hasPieceAt(int x, int y, boolean white, Class<? extends Piece> pieceType) {
-        List<Koordinaten> pieces = getAllPieces(white);
-        for (Koordinaten pos : pieces) {
-            if (pos.x == x && pos.y == y) {
-                return true; // Found piece at position, would need board to check type
-            }
-        }
-        return false;
+
+    public static boolean onlyHasPawns(boolean isWhite) {
+        return getKnights(isWhite).isEmpty()
+                && getBishops(isWhite).isEmpty()
+                && getRooks(isWhite).isEmpty()
+                && getQueens(isWhite).isEmpty();
     }
 }

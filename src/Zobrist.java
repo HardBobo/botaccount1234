@@ -211,4 +211,12 @@ public class Zobrist {
 
         return enPassantFile;
     }
+
+    public static long nullMoveHashUpdate(long hash, Koordinaten ep) {
+        if(ep != null) {
+            hash ^= enPassantKeys[ep.x];
+        }
+        hash ^= sideToMoveKey;
+        return hash;
+    }
 }

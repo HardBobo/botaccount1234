@@ -16,15 +16,13 @@ public class MoveFinder {
     static final int LOWERBOUND = 1;
     static final int UPPERBOUND = 2;
 
+    static final int NMP_MIN_DEPTH = 4;
+    static final int REDUCTION_NMP = 2;
+
     static Map<Long, TTEntry> transpositionTable = new HashMap<>();
 
     public static ArrayList<Zug> possibleMoves(boolean white, Piece[][] board) {
         return Board.pieceTracker.generateMoves(white, board);
-    }
-
-    public static ArrayList<Zug> findBestMoves(Piece[][] board, int depth, boolean isWhite, ArrayList<Zug> orderedMoves, long hash) {
-        SearchResult result = findBestMovesWithAspirationWindow(board, depth, isWhite, orderedMoves, hash, Integer.MIN_VALUE + 1, Integer.MAX_VALUE - 1);
-        return result.moves;
     }
     
     public static SearchResult findBestMovesWithAspirationWindow(Piece[][] board, int depth, boolean isWhite, ArrayList<Zug> orderedMoves, long hash, int alpha, int beta) {
@@ -202,6 +200,22 @@ public class MoveFinder {
                 if (staticEval + margin2 <= alpha) {
                     return alpha; // fail-low hard
                 }
+            }
+        }
+
+        //Null Move Pruning
+        if(!inCheckNow && !PieceTracker.onlyHasPawns(isWhite) && depth >= NMP_MIN_DEPTH) {
+
+            long oldHash = hash;
+            NullState ns = new  NullState();
+            hash = doNullMoveUpdateHash(board, hash, ns);
+            int nullMoveScore = -negamax(board, depth - 1 - REDUCTION_NMP, -beta, -beta + 1, !isWhite, hash);
+            undoNullMove(board, ns);
+            hash = oldHash;
+
+            if(nullMoveScore >= beta) {
+                transpositionTable.put(hash, new TTEntry(nullMoveScore, depth, LOWERBOUND));
+                return beta;
             }
         }
 
@@ -395,13 +409,29 @@ public class MoveFinder {
         
         return hash;
     }
+
+    public static long doNullMoveUpdateHash(Piece [][] board, long hash, NullState ns) {
+        ns.epPawn = Spiel.bauerHasEnPassantFlag(board);
+        Spiel.resetPawnEnPassant(board);
+        return Zobrist.nullMoveHashUpdate(hash, ns.epPawn);
+    }
+
+    public static void undoNullMove(Piece [][] board, NullState ns) {
+        if (ns.epPawn != null) {
+            ((Bauer) board[ns.epPawn.y][ns.epPawn.x]).setEnPassantPossible(true);
+        }
+    }
+
+    // --- Null Move helpers ---
+    private static class NullState {
+        Koordinaten epPawn; // pawn that had en passant flag before null move
+    }
+
     public static MoveInfo saveMoveInfo(Zug zug, Piece[][] board) {
         MoveInfo info = new MoveInfo();
         Piece movingPiece = board[zug.startY][zug.startX];
         Piece targetPiece = board[zug.endY][zug.endX];
         boolean whiteToMove = movingPiece.isWhite();
-
-//        info.oldHash = currentHash;
 
         info.enPassantBauerCoords = Spiel.bauerHasEnPassantFlag(board);
 

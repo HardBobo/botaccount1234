@@ -247,13 +247,23 @@ public class Spiel {
 
         return rights;
     }
-    
+
     public static void resetPawnEnPassant(Piece[][] board){
-        for (int y = 0; y < 8; y++) {
-            for (int x = 0; x < 8; x++) {
-                if (board[y][x] instanceof Bauer) {
-                    ((Bauer) board[y][x]).setEnPassantPossible(false);
-                }
+        // Use PieceTracker to iterate only over pawns of both colors
+        // and clear their en passant flags if set.
+        PieceTracker tracker = Board.pieceTracker;
+        // White pawns
+        for (Koordinaten pos : tracker.getPawns(true)) {
+            Piece p = board[pos.y][pos.x];
+            if (p instanceof Bauer b && b.isEnPassantPossible()) {
+                b.setEnPassantPossible(false);
+            }
+        }
+        // Black pawns
+        for (Koordinaten pos : tracker.getPawns(false)) {
+            Piece p = board[pos.y][pos.x];
+            if (p instanceof Bauer b && b.isEnPassantPossible()) {
+                b.setEnPassantPossible(false);
             }
         }
     }
