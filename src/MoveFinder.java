@@ -7,7 +7,7 @@ public class MoveFinder {
     private static volatile boolean timeUp = false;
     // Set to true if an iteration was aborted due to timeout inside the search
     private static volatile boolean depthAborted = false;
-    
+
     // Node counting for debug output
     private static long nodeCount = 0;
     private static long searchStartTime = 0;
@@ -17,14 +17,14 @@ public class MoveFinder {
     static final int UPPERBOUND = 2;
 
     static final int NMP_MIN_DEPTH = 4;
-    static final int REDUCTION_NMP = 2;
+    static final int REDUCTION_NMP = 3;
 
     static Map<Long, TTEntry> transpositionTable = new HashMap<>();
 
     public static ArrayList<Zug> possibleMoves(boolean white, Piece[][] board) {
         return Board.pieceTracker.generateMoves(white, board);
     }
-    
+
     public static SearchResult findBestMovesWithAspirationWindow(Piece[][] board, int depth, boolean isWhite, ArrayList<Zug> orderedMoves, long hash, int alpha, int beta) {
         if (System.currentTimeMillis() >= searchEndTimeMs) { timeUp = true; return new SearchResult(orderedMoves, 0, false); }
 
@@ -41,7 +41,7 @@ public class MoveFinder {
         // List to hold moves with their scores (only fully searched moves)
         ArrayList<ZugScore> scoredMoves = new ArrayList<>();
         HashSet<Zug> completed = new HashSet<>();
-        
+
         int bestScore = Integer.MIN_VALUE;
         boolean failedLow = false;
         boolean failedHigh = false;
@@ -55,7 +55,7 @@ public class MoveFinder {
             hash = doMoveUpdateHash(zug, board, info, hash);
 
             // Search with aspiration window
-            int score = -negamax(board, depth-1, -beta, -alpha, !isWhite, hash);
+            int score = -negamax(board, depth-1, -beta, -alpha, !isWhite, hash, true);
 
             // Always undo before any potential early return/break
             undoMove(zug, board, info);
@@ -72,24 +72,24 @@ public class MoveFinder {
 
             scoredMoves.add(new ZugScore(zug, score));
             completed.add(zug);
-            
+
             // Track best score and check for aspiration window failures
             if (score > bestScore) {
                 bestScore = score;
             }
-            
+
             // Check for fail-high (score >= beta)
             if (score >= beta) {
                 failedHigh = true;
                 break; // This move is too good, opponent won't allow it
             }
-            
+
             // Update alpha for next move
             if (score > alpha) {
                 alpha = score;
             }
         }
-        
+
         // Check for fail-low (bestScore <= original alpha)
         if (bestScore <= alpha && !scoredMoves.isEmpty()) {
             failedLow = true;
@@ -127,13 +127,13 @@ public class MoveFinder {
             this.score = score;
         }
     }
-    
+
     // Result class to return both moves and best score
     static class SearchResult {
         ArrayList<Zug> moves;
         int bestScore;
         boolean hasScore; // true if we have a valid score
-        
+
         SearchResult(ArrayList<Zug> moves, int bestScore, boolean hasScore) {
             this.moves = moves;
             this.bestScore = bestScore;
@@ -142,7 +142,12 @@ public class MoveFinder {
     }
 
 
+    // Backward-compatible wrapper: allow null moves by default
     public static int negamax(Piece [][] board, int depth, int alpha, int beta, boolean isWhite, long hash) {
+        return negamax(board, depth, alpha, beta, isWhite, hash, true);
+    }
+
+    public static int negamax(Piece [][] board, int depth, int alpha, int beta, boolean isWhite, long hash, boolean canNull) {
         nodeCount++; // Count this node
 
         if (System.currentTimeMillis() >= searchEndTimeMs) {
@@ -203,13 +208,13 @@ public class MoveFinder {
             }
         }
 
-        //Null Move Pruning
-        if(!inCheckNow && !PieceTracker.onlyHasPawns(isWhite) && depth >= NMP_MIN_DEPTH) {
+        // Null Move Pruning (guard against consecutive null, pawn-only, in-check, and near-mate bounds)
+        if (canNull && !inCheckNow && !nearMateBounds && !PieceTracker.onlyHasPawns(isWhite) && depth >= NMP_MIN_DEPTH) {
 
             long oldHash = hash;
             NullState ns = new  NullState();
             hash = doNullMoveUpdateHash(board, hash, ns);
-            int nullMoveScore = -negamax(board, depth - 1 - REDUCTION_NMP, -beta, -beta + 1, !isWhite, hash);
+            int nullMoveScore = -negamax(board, depth - 1 - REDUCTION_NMP, -beta, -beta + 1, !isWhite, hash, false);
             undoNullMove(board, ns);
             hash = oldHash;
 
@@ -258,7 +263,7 @@ public class MoveFinder {
 
             hash = doMoveUpdateHash(zug, board, info, hash);
 
-            int child = -negamax(board, depth - 1, -beta, -alpha, !isWhite, hash);
+            int child = -negamax(board, depth - 1, -beta, -alpha, !isWhite, hash, true);
             if (child > value) {
                 value = child;
                 bestMove = zug;
@@ -271,7 +276,7 @@ public class MoveFinder {
 
             if(alpha >= beta)
                 break; //alpha beta cutoff
-           }
+        }
 
         int flag;
         if (value <= alphaOrig) {
@@ -291,7 +296,7 @@ public class MoveFinder {
 
     public static int qSearch(Piece [][] board, int alpha, int beta, boolean isWhite, long hash){
         nodeCount++; // Count this node
-        
+
         if (System.currentTimeMillis() >= searchEndTimeMs) {
             timeUp = true;
             depthAborted = true;
@@ -406,7 +411,7 @@ public class MoveFinder {
         int epAfter = Zobrist.getEnPassantFile(board, !info.movingPiece.isWhite());;
 
         hash = Zobrist.updateHash(hash, zug, info, board, castleRightsBefore, castleRightsAfter, epBefore, epAfter);
-        
+
         return hash;
     }
 
@@ -510,7 +515,7 @@ public class MoveFinder {
         }
 
 //        currentHash = info.oldHash;
-        
+
         // Update piece tracker for undo
         Board.pieceTracker.undoMove(zug, info, board);
     }
@@ -537,15 +542,15 @@ public class MoveFinder {
         int depth = 1;
         while (depth <= 64) {
             if (System.currentTimeMillis() >= searchEndTimeMs) break;
-            
+
             // Prepare depth
             timeUp = false;
             depthAborted = false;
             long depthStartTime = System.currentTimeMillis();
             long nodesAtDepthStart = nodeCount;
-            
+
             SearchResult result;
-            
+
             if (depth == 1 || !hasPreviousScore) {
                 // First depth or no previous score - use full window
                 result = findBestMovesWithAspirationWindow(board, depth, isWhite, order, hash, Integer.MIN_VALUE + 1, Integer.MAX_VALUE - 1);
@@ -554,7 +559,7 @@ public class MoveFinder {
                 final int ASPIRATION_WINDOW = 50;
                 int alpha = previousScore - ASPIRATION_WINDOW;
                 int beta = previousScore + ASPIRATION_WINDOW;
-                
+
                 result = searchWithAspirationWindowRetries(board, depth, isWhite, order, hash, alpha, beta, previousScore);
             }
 
@@ -564,7 +569,7 @@ public class MoveFinder {
             long nodesThisDepth = nodeCount - nodesAtDepthStart;
             long nps = (nodesThisDepth * 1000L) / depthTime;
             long totalTime = depthEndTime - searchStartTime;
-            
+
             // Adopt improvements found so far at this depth
             // Only update best move when we have a fully evaluated result at this depth
             if (result.hasScore && !result.moves.isEmpty()) {
@@ -576,19 +581,19 @@ public class MoveFinder {
             if (!result.moves.isEmpty()) {
                 order = result.moves;
             }
-                // Debug output for completed depth
-                if (!depthAborted && !timeUp) {
-                    String moveStr = String.format("%-7s", bestSoFar.processZug());
-                    String evalStr = result.hasScore ? String.format("%+4d", result.bestScore) : "  ?"; 
-                    System.out.printf("   %2d    | %7d | %9d | %s | %s%n", 
+            // Debug output for completed depth
+            if (!depthAborted && !timeUp) {
+                String moveStr = String.format("%-7s", bestSoFar.processZug());
+                String evalStr = result.hasScore ? String.format("%+4d", result.bestScore) : "  ?";
+                System.out.printf("   %2d    | %7d | %9d | %s | %s%n",
                         depth, totalTime, nps, moveStr, evalStr);
-                } else {
-                    // Partial depth completed
-                    String moveStr = String.format("%-7s", bestSoFar.processZug());
-                    String evalStr = result.hasScore ? String.format("%+4d", result.bestScore) : "  ?";
-                    System.out.printf("   %2d*   | %7d | %9d | %s | %s (teilweise)%n", 
+            } else {
+                // Partial depth completed
+                String moveStr = String.format("%-7s", bestSoFar.processZug());
+                String evalStr = result.hasScore ? String.format("%+4d", result.bestScore) : "  ?";
+                System.out.printf("   %2d*   | %7d | %9d | %s | %s (teilweise)%n",
                         depth, totalTime, nps, moveStr, evalStr);
-                }
+            }
 
             // If depth aborted due to timeout, stop after adopting partial improvements
             if (depthAborted || timeUp || System.currentTimeMillis() >= searchEndTimeMs) {
@@ -597,35 +602,35 @@ public class MoveFinder {
 
             depth++;
         }
-        
+
         // Final summary
         long totalTime = System.currentTimeMillis() - searchStartTime;
         long totalNps = totalTime > 0 ? (nodeCount * 1000L) / totalTime : 0;
         System.out.println("---------------------------------------------------------------");
-        System.out.printf("Gesamt: %d Tiefe, %dms, %d Knoten, %d NPS%n", 
-            depth - 1, totalTime, nodeCount, totalNps);
-        System.out.printf("Bester Zug: %s (Eval: %s)%n", 
-            bestSoFar.processZug(), hasPreviousScore ? String.format("%+d", previousScore) : "?");
+        System.out.printf("Gesamt: %d Tiefe, %dms, %d Knoten, %d NPS%n",
+                depth - 1, totalTime, nodeCount, totalNps);
+        System.out.printf("Bester Zug: %s (Eval: %s)%n",
+                bestSoFar.processZug(), hasPreviousScore ? String.format("%+d", previousScore) : "?");
         System.out.println();
-        
+
         return bestSoFar;
     }
-    
+
     // Helper method to handle aspiration window retries on fail-high/fail-low
     private static SearchResult searchWithAspirationWindowRetries(Piece[][] board, int depth, boolean isWhite, ArrayList<Zug> order, long hash, int alpha, int beta, int expectedScore) {
         SearchResult result = findBestMovesWithAspirationWindow(board, depth, isWhite, order, hash, alpha, beta);
-        
+
         // If we have a score and it's outside our aspiration window, we need to re-search with wider window
         if (result.hasScore) {
             if (result.bestScore <= alpha) {
                 // Fail low - research with lowered alpha
                 return findBestMovesWithAspirationWindow(board, depth, isWhite, order, hash, Integer.MIN_VALUE + 1, beta);
             } else if (result.bestScore >= beta) {
-                // Fail high - research with raised beta  
+                // Fail high - research with raised beta
                 return findBestMovesWithAspirationWindow(board, depth, isWhite, order, hash, alpha, Integer.MAX_VALUE - 1);
             }
         }
-        
+
         return result;
     }
     public static void setSearchDeadline(long deadlineMs) {
@@ -638,8 +643,8 @@ public class MoveFinder {
         setSearchDeadline(Long.MAX_VALUE);
         ArrayList<Zug> order = possibleMoves(isWhite, board);
         if (order.isEmpty()) return null;
-	
-	    MoveOrdering.orderMoves(order, board, isWhite);
+
+        MoveOrdering.orderMoves(order, board, isWhite);
 
         int prevScore = 0;
         boolean hasPreviousScore = false;
