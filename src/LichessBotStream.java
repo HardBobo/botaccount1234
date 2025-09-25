@@ -319,13 +319,41 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
         if (moveCount > lastProcessedMoveCount) { // stellungsupdate
             Zug zug;
             for (int i = lastProcessedMoveCount; i < moveList.length; i++) {
-                //System.out.println("Neuer Zug erkannt: " + moveList[i]);
-                zug = new Zug(moveList[i]);
+                String raw = moveList[i];
+                String norm = normalizeCastleUci(raw, Board.brett);
+                if (!raw.equals(norm)) {
+                    System.out.println("[Sync] Normalized castling move: " + raw + " -> " + norm);
+                }
+                zug = new Zug(norm);
                 MoveInfo info = MoveFinder.saveMoveInfo(zug, Board.brett);
-                startHash = MoveFinder.doMoveUpdateHash(new Zug(moveList[i]), Board.brett, info, startHash);
+                startHash = MoveFinder.doMoveUpdateHash(new Zug(norm), Board.brett, info, startHash);
             }
             lastProcessedMoveCount = moveList.length;
         }
+    }
+
+    // Normalize non-standard castling like e8h8/e1a1 into e8g8/e1c1,
+    // but ONLY if the starting square currently holds a king.
+    private static String normalizeCastleUci(String lan, Piece[][] board) {
+        if (lan == null || lan.length() < 4) return lan;
+        char sFile = lan.charAt(0);
+        char sRank = lan.charAt(1);
+        char eFile = lan.charAt(2);
+        char eRank = lan.charAt(3);
+        // Only consider potential castle if: starts from e-file, same rank, ends on rook file, and piece is actually a king
+        if (sFile == 'e' && (sRank == '1' || sRank == '8') && eRank == sRank && (eFile == 'h' || eFile == 'a')) {
+            int startX = sFile - 'a'; // 0..7
+            int startY = 8 - Character.getNumericValue(sRank); // rank '1' -> 7, '8' -> 0
+            
+            Piece p = board[startY][startX];
+            if (p instanceof Koenig) {
+                char newFile = (eFile == 'h') ? 'g' : 'c';
+                String prefix = "" + sFile + sRank + newFile + eRank;
+                return (lan.length() > 4) ? prefix + lan.substring(4) : prefix;
+            }
+            
+        }
+        return lan;
     }
 
     private static boolean playOpeningMove(String gameId) throws IOException {

@@ -163,20 +163,45 @@ public class MoveFinder {
 
         if (depth == 0){
             return qSearch(board, alpha, beta, isWhite, hash);
-            //Evaluation.evaluation(board, isWhite);
-//            return ;
         }
 
+        // Futility context
+        boolean inCheckNow = Spiel.inCheck(board, isWhite);
+        boolean nearMateBounds = (alpha <= -(100000 - 200)) || (beta >= (100000 - 200));
+        int staticEval = 0;
+        boolean haveStaticEval = false;
+        if (!inCheckNow && !nearMateBounds && depth <= 2) {
+            staticEval = Evaluation.evaluation(board, isWhite);
+            haveStaticEval = true;
+        }
 
         ArrayList<Zug> pseudoLegalMoves = possibleMoves(isWhite, board);
 
         pseudoLegalMoves.removeIf(zug -> !Spiel.isLegalMove(zug, board, isWhite));
 
         if (pseudoLegalMoves.isEmpty()) {
-            if (Spiel.inCheck(board, isWhite)) {
+            if (inCheckNow) {
                 return -(100000 + depth);
             } else {
                 return 0;
+            }
+        }
+
+        // Node-level futility pruning (frontier and extended)
+        if (!inCheckNow && !nearMateBounds && haveStaticEval) {
+            // Depth 1: frontier futility pruning
+            if (depth == 1) {
+                int margin1 = 300; // ~ minor piece
+                if (staticEval + margin1 <= alpha) {
+                    return alpha; // fail-low hard as per CPW/TR
+                }
+            }
+            // Depth 2: extended futility pruning
+            if (depth == 2) {
+                int margin2 = 500; // ~ rook
+                if (staticEval + margin2 <= alpha) {
+                    return alpha; // fail-low hard
+                }
             }
         }
 
@@ -190,6 +215,29 @@ public class MoveFinder {
         int value = Integer.MIN_VALUE;
         Zug bestMove = null;
         for (Zug zug : pseudoLegalMoves){
+
+            // Move-level futility pruning at frontier (depth 1):
+            // skip quiet moves that neither capture, promote, nor give check,
+            // and for which staticEval + small margin cannot raise alpha.
+            if (!inCheckNow && !nearMateBounds && depth == 1) {
+                boolean isQuiet = !Spiel.isCapture(board, zug) && !Spiel.willPromote(zug, board);
+                if (isQuiet) {
+                    // ensure staticEval available
+                    if (!haveStaticEval) { staticEval = Evaluation.evaluation(board, isWhite); haveStaticEval = true; }
+                    // check if move gives check by temporary make/unmake
+                    MoveInfo chInfo = saveMoveInfo(zug, board);
+                    doMoveNoHash(zug, board, chInfo);
+                    boolean givesCheck = Spiel.inCheck(board, !isWhite);
+                    undoMove(zug, board, chInfo);
+
+                    if (!givesCheck) {
+                        int moveMargin = 150; // small safety margin for quiet move potential
+                        if (staticEval + moveMargin <= alpha) {
+                            continue; // prune futile quiet move
+                        }
+                    }
+                }
+            }
 
             MoveInfo info = saveMoveInfo(zug, board);
             long oldHash = hash;
@@ -488,16 +536,16 @@ public class MoveFinder {
             long totalTime = depthEndTime - searchStartTime;
             
             // Adopt improvements found so far at this depth
-            if (!result.moves.isEmpty()) {
+            // Only update best move when we have a fully evaluated result at this depth
+            if (result.hasScore && !result.moves.isEmpty()) {
                 bestSoFar = result.moves.getFirst();
+                previousScore = result.bestScore;
+                hasPreviousScore = true;
+            }
+            // Always refresh ordering to keep completed moves first
+            if (!result.moves.isEmpty()) {
                 order = result.moves;
-                
-                // Update previous score for next iteration if we have a valid score
-                if (result.hasScore) {
-                    previousScore = result.bestScore;
-                    hasPreviousScore = true;
-                }
-                
+            }
                 // Debug output for completed depth
                 if (!depthAborted && !timeUp) {
                     String moveStr = String.format("%-7s", bestSoFar.processZug());
@@ -511,7 +559,6 @@ public class MoveFinder {
                     System.out.printf("   %2d*   | %7d | %9d | %s | %s (teilweise)%n", 
                         depth, totalTime, nps, moveStr, evalStr);
                 }
-            }
 
             // If depth aborted due to timeout, stop after adopting partial improvements
             if (depthAborted || timeUp || System.currentTimeMillis() >= searchEndTimeMs) {
