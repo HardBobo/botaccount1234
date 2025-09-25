@@ -166,9 +166,9 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                                             JSONObject state = event.getJSONObject("state");
                                             long wt = state.optLong("wtime", whiteTimeMs);
                                             long bt = state.optLong("btime", blackTimeMs);
-                                            // Schutz: falls Sekunden statt Millisekunden geliefert wurden (unerwartet), konvertiere heuristisch
-                                            whiteTimeMs = normalizeMs(wt);
-                                            blackTimeMs = normalizeMs(bt);
+                                            // Lichess liefert wtime/btime in Millisekunden. Keine weitere Normalisierung!
+                                            whiteTimeMs = wt;
+                                            blackTimeMs = bt;
                                             // Inkremente ggf. aus state (Millisekunden)
                                             whiteIncMs = state.optLong("winc", whiteIncMs);
                                             blackIncMs = state.optLong("binc", blackIncMs);
@@ -184,8 +184,8 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                                 } else if ("gameState".equals(type)) { // normaler gamestate
                                     // Zeit pro Zug (Millisekunden) aus gameState (wtime/btime), ggf. winc/binc
                                     try {
-                                        if (event.has("wtime")) whiteTimeMs = normalizeMs(event.getLong("wtime"));
-                                        if (event.has("btime")) blackTimeMs = normalizeMs(event.getLong("btime"));
+                                        if (event.has("wtime")) whiteTimeMs = event.getLong("wtime");
+                                        if (event.has("btime")) blackTimeMs = event.getLong("btime");
                                         if (event.has("winc")) whiteIncMs = event.getLong("winc");
                                         if (event.has("binc")) blackIncMs = event.getLong("binc");
                                     } catch (Exception ignored) {}
@@ -286,12 +286,9 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                 || ("black".equals(myColor) && moveCount % 2 == 1);
     }
 
-    // Heuristik: Falls times < 1000 aber wir erwarten ms, konvertiere Sekunden → Millisekunden
+    // Lichess liefert wtime/btime/winc/binc in Millisekunden. Keine Konvertierung nötig.
+    // Diese Methode bleibt für Kompatibilität bestehen, macht aber nichts mehr.
     private static long normalizeMs(long v) {
-        if (v > 0 && v < 1000) {
-            // Wenn initial baseTime groß wirkt (>= 5s), ist die Wahrscheinlichkeit hoch, dass v Sekunden war
-            if (baseTimeSeconds >= 5) return v * 1000L;
-        }
         return v;
     }
 

@@ -2,10 +2,12 @@ import java.util.ArrayList;
 
 public class TimeManager {
     public static long computeThinkTimeMs(long timeLeftMs, long incMs) {
-        if (incMs != 0) {
-            return Math.max((long) (timeLeftMs/30 + incMs * 0.7), 100);
-        } else {
-            return timeLeftMs/35;
-        }
+        // Base suggestion
+        long base = (timeLeftMs / 30) + (long)(incMs * 0.7);
+        // Soft cap: never spend more than 20% of remaining time in one move
+        long softCap = Math.max(200, timeLeftMs / 5);
+        long think = Math.min(base, softCap);
+        // Emergency floor
+        return Math.max(think, 100);
     }
 }
