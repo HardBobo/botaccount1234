@@ -16,8 +16,8 @@ public class MoveFinder {
     static final int LOWERBOUND = 1;
     static final int UPPERBOUND = 2;
 
-    static final int NMP_MIN_DEPTH = 4;
-    static final int REDUCTION_NMP = 3;
+    static final int NMP_MIN_DEPTH = 3;
+    static final int REDUCTION_NMP = 2;
 
     static Map<Long, TTEntry> transpositionTable = new HashMap<>();
 
@@ -214,7 +214,7 @@ public class MoveFinder {
             long oldHash = hash;
             NullState ns = new  NullState();
             hash = doNullMoveUpdateHash(board, hash, ns);
-            int nullMoveScore = -negamax(board, depth - 1 - REDUCTION_NMP, -beta, -beta + 1, !isWhite, hash, false);
+            int nullMoveScore = -negamax(board, depth - REDUCTION_NMP, -beta, -beta + 1, !isWhite, hash, false);
             undoNullMove(board, ns);
             hash = oldHash;
 
