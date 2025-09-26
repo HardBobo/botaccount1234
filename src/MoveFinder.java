@@ -207,9 +207,11 @@ public class MoveFinder {
                 }
             }
         }
+        
+        boolean nonPV = (beta - alpha == 1);
 
         // Null Move Pruning (guard against consecutive null, pawn-only, in-check, and near-mate bounds)
-        if (canNull && !inCheckNow && !nearMateBounds && !PieceTracker.onlyHasPawns(isWhite) && depth >= NMP_MIN_DEPTH) {
+        if (canNull && nonPV && !inCheckNow && !nearMateBounds && !PieceTracker.onlyHasPawns(isWhite) && depth >= NMP_MIN_DEPTH) {
 
             long oldHash = hash;
             NullState ns = new  NullState();
@@ -234,6 +236,7 @@ public class MoveFinder {
         int value = Integer.MIN_VALUE;
         Zug bestMove = null;
         int moveIndex = 0;
+        boolean firstMove = true;
         for (Zug zug : pseudoLegalMoves){
 
             // Precompute quietness once for this move (before making it)
@@ -263,25 +266,33 @@ public class MoveFinder {
 
             // Late Move Reductions (LMR):
             // reduce late, quiet, non-check moves at non-PV nodes when depth >= 3 and not in check
-            boolean nonPV = (beta - alpha == 1);
-            boolean applyLMR = nonPV && !inCheckNow && depth >= 3 && moveIndex >= 3 && isQuietMove && !givesCheck;
+
 
             int child;
-            if (applyLMR) {
-                int r = 1;
-                int reducedDepth = depth - 1 - r;
-                if (reducedDepth >= 1) {
-                    // null-window reduced search
-                    child = -negamax(board, reducedDepth, -alpha - 1, -alpha, !isWhite, hash);
-                    // if it improves alpha, re-search full depth
-                    if (child > alpha) {
+            if (firstMove) {
+                // Principal variation move: full-window search
+                child = -negamax(board, depth - 1, -beta, -alpha, !isWhite, hash);
+            } else {
+                // PVS for later moves: start with null-window, possibly reduced by LMR
+                boolean applyLMR = nonPV && !inCheckNow && depth >= 3 && moveIndex >= 3 && isQuietMove && !givesCheck;
+                int r = applyLMR ? 1 : 0;
+                int searchDepth = depth - 1 - r;
+                if (searchDepth < 1) searchDepth = depth - 1; // safety
+
+                // Null-window probe
+                child = -negamax(board, searchDepth, -alpha - 1, -alpha, !isWhite, hash);
+
+                // If raised alpha in reduced probe, re-search
+                if (child > alpha) {
+                    // If reduced, re-search at full depth null-window first
+                    if (r > 0 && (depth - 1) >= 1) {
+                        child = -negamax(board, depth - 1, -alpha - 1, -alpha, !isWhite, hash);
+                    }
+                    // If still raises alpha and not fail-high, re-search full window
+                    if (child > alpha && child < beta) {
                         child = -negamax(board, depth - 1, -beta, -alpha, !isWhite, hash);
                     }
-                } else {
-                    child = -negamax(board, depth - 1, -beta, -alpha, !isWhite, hash);
                 }
-            } else {
-                child = -negamax(board, depth - 1, -beta, -alpha, !isWhite, hash);
             }
 
             if (child > value) {
@@ -297,6 +308,7 @@ public class MoveFinder {
             if(alpha >= beta)
                 break; //alpha beta cutoff
 
+            firstMove = false;
             moveIndex++;
            }
 
