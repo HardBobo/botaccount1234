@@ -211,12 +211,14 @@ public class MoveFinder {
         boolean nonPV = (beta - alpha == 1);
 
         // Null Move Pruning (guard against consecutive null, pawn-only, in-check, and near-mate bounds)
-        if (canNull && nonPV && !inCheckNow && !nearMateBounds && !PieceTracker.onlyHasPawns(isWhite) && depth >= NMP_MIN_DEPTH) {
+        // Adaptive reduction: r = 2 normally, r = 3 for deeper nodes
+        int nmpR = 2 + (depth >= 7 ? 1 : 0);
+        if (canNull && nonPV && !inCheckNow && !nearMateBounds && !PieceTracker.onlyHasPawns(isWhite) && depth >= (nmpR + 1)) {
 
             long oldHash = hash;
             NullState ns = new  NullState();
             hash = doNullMoveUpdateHash(board, hash, ns);
-            int nullMoveScore = -negamax(board, depth - REDUCTION_NMP, -beta, -beta + 1, !isWhite, hash, false);
+            int nullMoveScore = -negamax(board, depth - 1 - nmpR, -beta, -beta + 1, !isWhite, hash, false);
             undoNullMove(board, ns);
             hash = oldHash;
 
