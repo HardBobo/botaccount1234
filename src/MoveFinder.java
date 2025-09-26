@@ -16,6 +16,10 @@ public class MoveFinder {
     static final int LOWERBOUND = 1;
     static final int UPPERBOUND = 2;
 
+    // Delta pruning constants for qSearch
+    private static final int[] DELTA_PIECE_VALUES = {100, 300, 310, 500, 900, 0}; // P, N, B, R, Q, K
+    private static final int DELTA_MARGIN = 80; // safety margin in centipawns
+
     static final int NMP_MIN_DEPTH = 3;
     static final int REDUCTION_NMP = 2;
 
@@ -332,14 +336,16 @@ public class MoveFinder {
 
     public static int qSearch(Piece [][] board, int alpha, int beta, boolean isWhite, long hash){
         nodeCount++; // Count this node
-
+        
         if (System.currentTimeMillis() >= searchEndTimeMs) {
             timeUp = true;
             depthAborted = true;
             return Evaluation.evaluation(board, isWhite);
         }
-
-
+        
+        // Near mate bounds guard for pruning heuristics
+        boolean nearMateBounds = (alpha <= -(100000 - 200)) || (beta >= (100000 - 200));
+        
         TTEntry entry = transpositionTable.get(hash);
         if (entry != null && entry.isValid) {
             if (ttLookup(alpha, beta, entry)) {return entry.value;}
@@ -348,14 +354,17 @@ public class MoveFinder {
         int alphaOrig = alpha;
 
         int best_value = Evaluation.evaluation(board, isWhite);
-
+        
         if( best_value >= beta ) {
             return best_value;
         }
-
+        
         if( best_value > alpha )
             alpha = best_value;
-
+        
+        // Detect if side to move is in check – disable delta pruning if so
+        boolean inCheckNow = Spiel.inCheck(board, isWhite);
+        
         ArrayList<Zug> moves = possibleMoves(isWhite, board);
 
         moves.removeIf(zug -> !Spiel.isLegalMove(zug, board, isWhite));
@@ -387,17 +396,37 @@ public class MoveFinder {
         Zug bestMove = null;
 
         for(Zug zug : forcingMoves)  {
-
+            // Delta pruning (move-level): if even capturing the target piece
+            // (and potential promotion gain) cannot raise alpha, skip the move.
+            if (!nearMateBounds && !inCheckNow) {
+                int capValue = 0;
+                if (Spiel.enPassant(zug, board)) {
+                    capValue = DELTA_PIECE_VALUES[0]; // pawn
+                } else {
+                    Piece target = board[zug.endY][zug.endX];
+                    if (!(target instanceof Empty)) {
+                        capValue = DELTA_PIECE_VALUES[target.getType()];
+                    }
+                }
+                int promoGain = 0;
+                if (zug.promoteTo == 'q' || Spiel.promotionQ(zug, board)) {
+                    promoGain = DELTA_PIECE_VALUES[4] - DELTA_PIECE_VALUES[0]; // Q - P
+                }
+                if (best_value + capValue + promoGain + DELTA_MARGIN <= alpha) {
+                    continue; // prune futile capture/promotion
+                }
+            }
+        
             MoveInfo info = saveMoveInfo(zug, board);
-
+        
             long oldHash = hash;
-
+        
             hash = doMoveUpdateHash(zug, board, info, hash);
-
+        
             int score = -qSearch(board, -beta, -alpha, !isWhite, hash);
-
+        
             undoMove(zug, board, info);
-
+        
             hash = oldHash;
 
             if( score >= beta ) {
