@@ -35,12 +35,6 @@ public class MoveOrdering {
             score += 50;
 
         }
-
-         //schachzug krasser
-         if (Spiel.inCheck(board, !isWhite)) {
-             score += 20;
-         }
-
         return score;
     }
     public static void orderMoves(ArrayList<Zug> moves, Piece[][] board, boolean isWhite) {
