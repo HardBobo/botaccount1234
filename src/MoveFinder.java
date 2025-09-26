@@ -233,37 +233,57 @@ public class MoveFinder {
 
         int value = Integer.MIN_VALUE;
         Zug bestMove = null;
+        int moveIndex = 0;
         for (Zug zug : pseudoLegalMoves){
 
-            // Move-level futility pruning at frontier (depth 1):
-            // skip quiet moves that neither capture, promote, nor give check,
-            // and for which staticEval + small margin cannot raise alpha.
-            if (!inCheckNow && !nearMateBounds && depth == 1) {
-                boolean isQuiet = !Spiel.isCapture(board, zug) && !Spiel.willPromote(zug, board);
-                if (isQuiet) {
-                    // ensure staticEval available
-                    if (!haveStaticEval) { staticEval = Evaluation.evaluation(board, isWhite); haveStaticEval = true; }
-                    // check if move gives check by temporary make/unmake
-                    MoveInfo chInfo = saveMoveInfo(zug, board);
-                    doMoveNoHash(zug, board, chInfo);
-                    boolean givesCheck = Spiel.inCheck(board, !isWhite);
-                    undoMove(zug, board, chInfo);
-
-                    if (!givesCheck) {
-                        int moveMargin = 150; // small safety margin for quiet move potential
-                        if (staticEval + moveMargin <= alpha) {
-                            continue; // prune futile quiet move
-                        }
-                    }
-                }
-            }
+            // Precompute quietness once for this move (before making it)
+            boolean isQuietMove = !Spiel.isCapture(board, zug) && !Spiel.willPromote(zug, board);
 
             MoveInfo info = saveMoveInfo(zug, board);
             long oldHash = hash;
 
             hash = doMoveUpdateHash(zug, board, info, hash);
 
-            int child = -negamax(board, depth - 1, -beta, -alpha, !isWhite, hash, true);
+            // Determine if gives check after making the move
+            boolean givesCheck = Spiel.inCheck(board, !isWhite);
+
+            // Move-level futility pruning at frontier (depth 1), after we know if it gives check:
+            if (!inCheckNow && !nearMateBounds && depth == 1 && isQuietMove && !givesCheck) {
+                // ensure staticEval available
+                if (!haveStaticEval) { staticEval = Evaluation.evaluation(board, isWhite); haveStaticEval = true; }
+                int moveMargin = 150; // safety margin
+                if (staticEval + moveMargin <= alpha) {
+                    // prune this quiet move
+                    undoMove(zug, board, info);
+                    hash = oldHash;
+                    moveIndex++;
+                    continue;
+                }
+            }
+
+            // Late Move Reductions (LMR):
+            // reduce late, quiet, non-check moves at non-PV nodes when depth >= 3 and not in check
+            boolean nonPV = (beta - alpha == 1);
+            boolean applyLMR = nonPV && !inCheckNow && depth >= 3 && moveIndex >= 3 && isQuietMove && !givesCheck;
+
+            int child;
+            if (applyLMR) {
+                int r = 1;
+                int reducedDepth = depth - 1 - r;
+                if (reducedDepth >= 1) {
+                    // null-window reduced search
+                    child = -negamax(board, reducedDepth, -alpha - 1, -alpha, !isWhite, hash);
+                    // if it improves alpha, re-search full depth
+                    if (child > alpha) {
+                        child = -negamax(board, depth - 1, -beta, -alpha, !isWhite, hash);
+                    }
+                } else {
+                    child = -negamax(board, depth - 1, -beta, -alpha, !isWhite, hash);
+                }
+            } else {
+                child = -negamax(board, depth - 1, -beta, -alpha, !isWhite, hash);
+            }
+
             if (child > value) {
                 value = child;
                 bestMove = zug;
@@ -276,7 +296,9 @@ public class MoveFinder {
 
             if(alpha >= beta)
                 break; //alpha beta cutoff
-        }
+
+            moveIndex++;
+           }
 
         int flag;
         if (value <= alphaOrig) {
