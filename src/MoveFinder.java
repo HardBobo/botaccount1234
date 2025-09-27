@@ -8,11 +8,6 @@ public class MoveFinder {
     // Set to true if an iteration was aborted due to timeout inside the search
     private static volatile boolean depthAborted = false;
 
-    // Node counting for debug output
-    private static long nodeCount = 0;
-    private static long deltaPruneCount = 0; // counts delta prunes inside qSearch
-    private static long deltaConsideredCount = 0; // counts forcing moves seen in qSearch
-    private static long searchStartTime = 0;
 
     static final int EXACT = 0;
     static final int LOWERBOUND = 1;
@@ -154,7 +149,6 @@ public class MoveFinder {
     }
 
     public static int negamax(Piece [][] board, int depth, int alpha, int beta, boolean isWhite, long hash, boolean canNull) {
-        nodeCount++; // Count this node
 
         if (System.currentTimeMillis() >= searchEndTimeMs) {
             timeUp = true;
@@ -337,7 +331,6 @@ public class MoveFinder {
     }
 
     public static int qSearch(Piece [][] board, int alpha, int beta, boolean isWhite, long hash){
-        nodeCount++; // Count this node
         
         if (System.currentTimeMillis() >= searchEndTimeMs) {
             timeUp = true;
@@ -398,8 +391,6 @@ public class MoveFinder {
         Zug bestMove = null;
 
         for(Zug zug : forcingMoves)  {
-            // Count forcing moves for delta-prune statistics
-            deltaConsideredCount++;
             // Delta pruning (move-level): conservative application only at non-PV nodes,
             // skipping promotions and en passant to avoid tactical misses.
             boolean nonPVq = (beta - alpha == 1);
@@ -412,7 +403,6 @@ public class MoveFinder {
                         capValue = DELTA_PIECE_VALUES[target.getType()];
                     }
                     if (best_value + capValue + DELTA_MARGIN <= alpha) {
-                        deltaPruneCount++;
                         continue; // prune futile capture
                     }
                 }
@@ -588,10 +578,7 @@ public class MoveFinder {
 
     // Time-limited iterative deepening; search runs until deadline and returns best-so-far
     public static Zug iterativeDeepening (Piece[][] board, boolean isWhite, long hash, long timeLimitMs){
-
-        searchStartTime = System.currentTimeMillis();
-        setSearchDeadline(searchStartTime + Math.max(1, timeLimitMs));
-        nodeCount = 0; // Reset node counter
+        setSearchDeadline(System.currentTimeMillis() + Math.max(1, timeLimitMs));
 
         ArrayList<Zug> order = possibleMoves(isWhite, board);
         if (order.isEmpty()) return null;
@@ -602,26 +589,18 @@ public class MoveFinder {
         int previousScore = 0;
         boolean hasPreviousScore = false;
 
-        System.out.println("Suche gestartet - Tiefe | Zeit(ms) | Nodes/Sek | Zug     | Eval");
-        System.out.println("---------------------------------------------------------------");
-
         int depth = 1;
         while (depth <= 64) {
             if (System.currentTimeMillis() >= searchEndTimeMs) break;
 
-            // Prepare depth
             timeUp = false;
             depthAborted = false;
-            long depthStartTime = System.currentTimeMillis();
-            long nodesAtDepthStart = nodeCount;
 
             SearchResult result;
 
             if (depth == 1 || !hasPreviousScore) {
-                // First depth or no previous score - use full window
                 result = findBestMovesWithAspirationWindow(board, depth, isWhite, order, hash, Integer.MIN_VALUE + 1, Integer.MAX_VALUE - 1);
             } else {
-                // Use aspiration window based on previous score
                 final int ASPIRATION_WINDOW = 50;
                 int alpha = previousScore - ASPIRATION_WINDOW;
                 int beta = previousScore + ASPIRATION_WINDOW;
@@ -629,55 +608,21 @@ public class MoveFinder {
                 result = searchWithAspirationWindowRetries(board, depth, isWhite, order, hash, alpha, beta, previousScore);
             }
 
-            // Calculate stats for this depth
-            long depthEndTime = System.currentTimeMillis();
-            long depthTime = Math.max(1, depthEndTime - depthStartTime);
-            long nodesThisDepth = nodeCount - nodesAtDepthStart;
-            long nps = (nodesThisDepth * 1000L) / depthTime;
-            long totalTime = depthEndTime - searchStartTime;
-
-            // Adopt improvements found so far at this depth
-            // Only update best move when we have a fully evaluated result at this depth
             if (result.hasScore && !result.moves.isEmpty()) {
                 bestSoFar = result.moves.getFirst();
                 previousScore = result.bestScore;
                 hasPreviousScore = true;
             }
-            // Always refresh ordering to keep completed moves first
             if (!result.moves.isEmpty()) {
                 order = result.moves;
             }
-            // Debug output for completed depth
-            if (!depthAborted && !timeUp) {
-                String moveStr = String.format("%-7s", bestSoFar.processZug());
-                String evalStr = result.hasScore ? String.format("%+4d", result.bestScore) : "  ?";
-                System.out.printf("   %2d    | %7d | %9d | %s | %s%n",
-                        depth, totalTime, nps, moveStr, evalStr);
-            } else {
-                // Partial depth completed
-                String moveStr = String.format("%-7s", bestSoFar.processZug());
-                String evalStr = result.hasScore ? String.format("%+4d", result.bestScore) : "  ?";
-                System.out.printf("   %2d*   | %7d | %9d | %s | %s (teilweise)%n",
-                        depth, totalTime, nps, moveStr, evalStr);
-            }
 
-            // If depth aborted due to timeout, stop after adopting partial improvements
             if (depthAborted || timeUp || System.currentTimeMillis() >= searchEndTimeMs) {
                 break;
             }
 
             depth++;
         }
-
-        // Final summary
-        long totalTime = System.currentTimeMillis() - searchStartTime;
-        long totalNps = totalTime > 0 ? (nodeCount * 1000L) / totalTime : 0;
-        System.out.println("---------------------------------------------------------------");
-        System.out.printf("Gesamt: %d Tiefe, %dms, %d Knoten, %d NPS%n",
-                depth - 1, totalTime, nodeCount, totalNps);
-        System.out.printf("Bester Zug: %s (Eval: %s)%n",
-                bestSoFar.processZug(), hasPreviousScore ? String.format("%+d", previousScore) : "?");
-        System.out.println();
 
         return bestSoFar;
     }
