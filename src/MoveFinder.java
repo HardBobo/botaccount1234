@@ -10,15 +10,17 @@ public class MoveFinder {
 
     // Node counting for debug output
     private static long nodeCount = 0;
+    private static long deltaPruneCount = 0; // counts delta prunes inside qSearch
+    private static long deltaConsideredCount = 0; // counts forcing moves seen in qSearch
     private static long searchStartTime = 0;
 
     static final int EXACT = 0;
     static final int LOWERBOUND = 1;
     static final int UPPERBOUND = 2;
 
-    // Delta pruning constants for qSearch
-    private static final int[] DELTA_PIECE_VALUES = {100, 300, 310, 500, 900, 0}; // P, N, B, R, Q, K
-    private static final int DELTA_MARGIN = 80; // safety margin in centipawns
+    // Delta pruning constants for qSearch (conservative)
+    private static final int[] DELTA_PIECE_VALUES = {100, 300, 310, 500, 1000, 0}; // P, N, B, R, Q, K
+    private static final int DELTA_MARGIN = 200; // safety margin in centipawns
 
     static final int NMP_MIN_DEPTH = 3;
     static final int REDUCTION_NMP = 2;
@@ -396,24 +398,23 @@ public class MoveFinder {
         Zug bestMove = null;
 
         for(Zug zug : forcingMoves)  {
-            // Delta pruning (move-level): if even capturing the target piece
-            // (and potential promotion gain) cannot raise alpha, skip the move.
-            if (!nearMateBounds && !inCheckNow) {
-                int capValue = 0;
-                if (Spiel.enPassant(zug, board)) {
-                    capValue = DELTA_PIECE_VALUES[0]; // pawn
-                } else {
+            // Count forcing moves for delta-prune statistics
+            deltaConsideredCount++;
+            // Delta pruning (move-level): conservative application only at non-PV nodes,
+            // skipping promotions and en passant to avoid tactical misses.
+            boolean nonPVq = (beta - alpha == 1);
+            if (nonPVq && !nearMateBounds && !inCheckNow) {
+                // Skip delta pruning for promotions and en passant
+                if (!(zug.promoteTo == 'q' || Spiel.promotionQ(zug, board)) && !Spiel.enPassant(zug, board)) {
+                    int capValue = 0;
                     Piece target = board[zug.endY][zug.endX];
                     if (!(target instanceof Empty)) {
                         capValue = DELTA_PIECE_VALUES[target.getType()];
                     }
-                }
-                int promoGain = 0;
-                if (zug.promoteTo == 'q' || Spiel.promotionQ(zug, board)) {
-                    promoGain = DELTA_PIECE_VALUES[4] - DELTA_PIECE_VALUES[0]; // Q - P
-                }
-                if (best_value + capValue + promoGain + DELTA_MARGIN <= alpha) {
-                    continue; // prune futile capture/promotion
+                    if (best_value + capValue + DELTA_MARGIN <= alpha) {
+                        deltaPruneCount++;
+                        continue; // prune futile capture
+                    }
                 }
             }
         
