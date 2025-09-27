@@ -396,12 +396,13 @@ public class MoveFinder {
             boolean nonPVq = (beta - alpha == 1);
             if (nonPVq && !nearMateBounds && !inCheckNow) {
                 // Skip delta pruning for promotions and en passant
-                if (!(zug.promoteTo == 'q' || Spiel.promotionQ(zug, board)) && !Spiel.enPassant(zug, board)) {
-                    int capValue = 0;
+                if (!(zug.promoteTo == 'q')) {
+                    int capValue;
                     Piece target = board[zug.endY][zug.endX];
                     if (!(target instanceof Empty)) {
                         capValue = DELTA_PIECE_VALUES[target.getType()];
-                    }
+                    } else
+                        capValue = DELTA_PIECE_VALUES[0];
                     if (best_value + capValue + DELTA_MARGIN <= alpha) {
                         continue; // prune futile capture
                     }
