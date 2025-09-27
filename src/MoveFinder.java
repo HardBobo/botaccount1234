@@ -625,6 +625,11 @@ public class MoveFinder {
             depth++;
         }
 
+        // Emit exactly one minimal UCI info line so GUIs like fastchess don't warn
+        int reportedDepth = Math.max(1, depth - 1);
+        int reportScore = hasPreviousScore ? previousScore : 0;
+        System.out.printf("info depth %d score cp %d%n", reportedDepth, reportScore);
+
         return bestSoFar;
     }
 
