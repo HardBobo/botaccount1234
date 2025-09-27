@@ -267,7 +267,6 @@ public class Spiel {
             }
         }
     }
-    
     public static void resetMovingPiece(Zug zug, Piece [][] board, MoveInfo info){
         board[zug.startY][zug.startX] = info.movingPiece;
 
