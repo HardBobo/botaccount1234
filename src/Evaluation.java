@@ -162,7 +162,7 @@ public class Evaluation {
         return 2 * pieceType + color;
     }
 
-    public static int evaluation(Piece[][] board, boolean isWhite) {
+    public static int evaluation(boolean isWhite) {
         int[] mg = new int[2]; // middlegame scores for white and black
         int[] eg = new int[2]; // endgame scores for white and black
         int gamePhase = 0;

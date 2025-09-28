@@ -76,14 +76,14 @@ public class UCIWrapper {
                             best = panicBest(true);
                         } else {
                             long thinkMs = TimeManager.computeThinkTimeMs(wtimeMs, wincMs);
-                            best = MoveFinder.iterativeDeepening(null, true, startHash, thinkMs);
+                            best = MoveFinder.iterativeDeepening(true, startHash, thinkMs);
                         }
                     } else {
                         if (btimeMs >= 0 && btimeMs <= 4000 && bincMs <= 500) {
                             best = panicBest(false);
                         } else {
                             long thinkMs = TimeManager.computeThinkTimeMs(btimeMs, bincMs);
-                            best = MoveFinder.iterativeDeepening(null, false, startHash, thinkMs);
+                            best = MoveFinder.iterativeDeepening(false, startHash, thinkMs);
                         }
                     }
                 }
@@ -128,8 +128,8 @@ public class UCIWrapper {
         // apply the moves from the described root
         for (int i = 0; i < moveList.length; i++) {
             Zug zug = new Zug(moveList[i]);
-            MoveInfo info = MoveFinder.saveMoveInfo(zug, null);
-            startHash = MoveFinder.doMoveUpdateHash(zug, null, info, startHash);
+            MoveInfo info = MoveFinder.saveMoveInfo(zug);
+            startHash = MoveFinder.doMoveUpdateHash(zug, info, startHash);
         }
     }
     private static void parseUciTimeParameters(String command){
@@ -155,6 +155,6 @@ public class UCIWrapper {
         }
     }
     private static Zug panicBest(boolean whiteToMove){
-        return MoveFinder.searchToDepth(null, whiteToMove, startHash, 2);
+        return MoveFinder.searchToDepth(whiteToMove, startHash, 2);
     }
 }

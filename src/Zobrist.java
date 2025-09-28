@@ -90,7 +90,6 @@ public class Zobrist {
             long hash,
             Zug zug,
             MoveInfo info,
-            Piece [][] board,
             boolean[] castleRightsBefore,
             boolean[] castleRightsAfter,
             int enPassantFileBefore,

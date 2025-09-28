@@ -221,7 +221,7 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                                                             best = panicBest(isWhite);
                                                     } else {
                                                         long thinkMs = TimeManager.computeThinkTimeMs(timeLeft, incMs);
-                                                        best = MoveFinder.iterativeDeepening(null, true, startHash, thinkMs);
+                                                        best = MoveFinder.iterativeDeepening(true, startHash, thinkMs);
                                                     }
                                                     playMove(gameId, best.processZug());
                                                 }
@@ -240,7 +240,7 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                                                         best = panicBest(isWhite);
                                                     } else {
                                                         long thinkMs = TimeManager.computeThinkTimeMs(timeLeft, incMs);
-                                                        best = MoveFinder.iterativeDeepening(null, false, startHash, thinkMs);
+                                                        best = MoveFinder.iterativeDeepening(false, startHash, thinkMs);
                                                     }
                                                     playMove(gameId, best.processZug());
                                                 }
@@ -295,8 +295,8 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
     private static void doFirstMove(String gameId) throws IOException {
         Zug zug = Objects.requireNonNull(OpeningDictionary.getNextOpeningMove(""));
         playMove(gameId, zug.processZug());
-        MoveInfo info = MoveFinder.saveMoveInfo(zug, null);
-        startHash = MoveFinder.doMoveUpdateHash(zug, null, info, startHash);
+        MoveInfo info = MoveFinder.saveMoveInfo(zug);
+        startHash = MoveFinder.doMoveUpdateHash(zug, info, startHash);
         lastProcessedMoveCount++;
     }
 
@@ -325,8 +325,8 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                     System.out.println("[Sync] Normalized castling move: " + raw + " -> " + norm);
                 }
                 zug = new Zug(norm);
-                MoveInfo info = MoveFinder.saveMoveInfo(zug, null);
-                startHash = MoveFinder.doMoveUpdateHash(new Zug(norm), null, info, startHash);
+                MoveInfo info = MoveFinder.saveMoveInfo(zug);
+                startHash = MoveFinder.doMoveUpdateHash(new Zug(norm), info, startHash);
             }
             lastProcessedMoveCount = moveList.length;
         }
@@ -367,9 +367,9 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
     }
 
     private static Zug panicBest(boolean whiteToMove){
-        return MoveFinder.searchToDepth(null, whiteToMove, startHash, 2);
+        return MoveFinder.searchToDepth(whiteToMove, startHash, 2);
     }
     private static Zug ultraPanicBest(boolean whiteToMove){
-        return MoveFinder.searchToDepth(null, whiteToMove, startHash, 1);
+        return MoveFinder.searchToDepth(whiteToMove, startHash, 1);
     }
 }

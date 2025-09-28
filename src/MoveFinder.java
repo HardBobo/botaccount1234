@@ -22,12 +22,12 @@ public class MoveFinder {
 
     static Map<Long, TTEntry> transpositionTable = new HashMap<>();
 
-    public static ArrayList<Zug> possibleMoves(boolean white, Piece[][] board) {
+    public static ArrayList<Zug> possibleMoves(boolean white) {
         // Bitboard-based move generation
         return BitboardMoveGen.generate(white, Board.bitboards);
     }
 
-    public static SearchResult findBestMovesWithAspirationWindow(Piece[][] board, int depth, boolean isWhite, ArrayList<Zug> orderedMoves, long hash, int alpha, int beta) {
+    public static SearchResult findBestMovesWithAspirationWindow(int depth, boolean isWhite, ArrayList<Zug> orderedMoves, long hash, int alpha, int beta) {
         if (System.currentTimeMillis() >= searchEndTimeMs) { timeUp = true; return new SearchResult(orderedMoves, 0, false); }
 
         // Remove illegal moves using bitboards
@@ -51,16 +51,16 @@ public class MoveFinder {
         for (Zug zug : orderedMoves) {
             if (System.currentTimeMillis() >= searchEndTimeMs) { timeUp = true; break; }
 
-            MoveInfo info = saveMoveInfo(zug, board);
+            MoveInfo info = saveMoveInfo(zug);
             long oldHash = hash;
 
-            hash = doMoveUpdateHash(zug, board, info, hash);
+            hash = doMoveUpdateHash(zug, info, hash);
 
             // Search with aspiration window
-            int score = -negamax(board, depth-1, -beta, -alpha, !isWhite, hash, true);
+            int score = -negamax(depth-1, -beta, -alpha, !isWhite, hash, true);
 
             // Always undo before any potential early return/break
-            undoMove(zug, board, info);
+            undoMove(zug, info);
             hash = oldHash;
 
             // If time ran out or depth aborted during this move's search, do not
@@ -145,16 +145,16 @@ public class MoveFinder {
 
 
     // Backward-compatible wrapper: allow null moves by default
-    public static int negamax(Piece [][] board, int depth, int alpha, int beta, boolean isWhite, long hash) {
-        return negamax(board, depth, alpha, beta, isWhite, hash, true);
+    public static int negamax(int depth, int alpha, int beta, boolean isWhite, long hash) {
+        return negamax(depth, alpha, beta, isWhite, hash, true);
     }
 
-    public static int negamax(Piece [][] board, int depth, int alpha, int beta, boolean isWhite, long hash, boolean canNull) {
+    public static int negamax(int depth, int alpha, int beta, boolean isWhite, long hash, boolean canNull) {
 
         if (System.currentTimeMillis() >= searchEndTimeMs) {
             timeUp = true;
             depthAborted = true;
-            return Evaluation.evaluation(board, isWhite);
+            return Evaluation.evaluation(isWhite);
         }
 
         int alphaOrig = alpha;
@@ -166,7 +166,7 @@ public class MoveFinder {
         }
 
         if (depth == 0){
-            return qSearch(board, alpha, beta, isWhite, hash);
+            return qSearch(alpha, beta, isWhite, hash);
         }
 
         // Futility context
@@ -175,11 +175,11 @@ public class MoveFinder {
         int staticEval = 0;
         boolean haveStaticEval = false;
         if (!inCheckNow && !nearMateBounds && depth <= 2) {
-            staticEval = Evaluation.evaluation(board, isWhite);
+            staticEval = Evaluation.evaluation(isWhite);
             haveStaticEval = true;
         }
 
-        ArrayList<Zug> pseudoLegalMoves = possibleMoves(isWhite, board);
+        ArrayList<Zug> pseudoLegalMoves = possibleMoves(isWhite);
 
         pseudoLegalMoves.removeIf(zug -> !Board.bitboards.isLegalMove(zug, isWhite));
 
@@ -218,9 +218,9 @@ public class MoveFinder {
 
             long oldHash = hash;
             NullState ns = new  NullState();
-            hash = doNullMoveUpdateHash(board, hash, ns);
-            int nullMoveScore = -negamax(board, depth - 1 - nmpR, -beta, -beta + 1, !isWhite, hash, false);
-            undoNullMove(board, ns);
+            hash = doNullMoveUpdateHash(hash, ns);
+            int nullMoveScore = -negamax(depth - 1 - nmpR, -beta, -beta + 1, !isWhite, hash, false);
+            undoNullMove(ns);
             hash = oldHash;
 
             if(nullMoveScore >= beta) {
@@ -229,7 +229,7 @@ public class MoveFinder {
             }
         }
 
-        MoveOrdering.orderMoves(pseudoLegalMoves, board, isWhite);
+        MoveOrdering.orderMoves(pseudoLegalMoves, isWhite);
 
         // If we have a TT entry for this node, try its best move first
         if (entry != null && entry.isValid && entry.bestMove != null) {
@@ -245,10 +245,10 @@ public class MoveFinder {
             // Precompute quietness once for this move (before making it)
             boolean isQuietMove = !Board.bitboards.isCapture(zug) && !Board.bitboards.willPromote(zug);
 
-            MoveInfo info = saveMoveInfo(zug, board);
+            MoveInfo info = saveMoveInfo(zug);
             long oldHash = hash;
 
-            hash = doMoveUpdateHash(zug, board, info, hash);
+            hash = doMoveUpdateHash(zug, info, hash);
 
             // Determine if gives check after making the move
             boolean givesCheck = Board.bitboards.inCheck(!isWhite);
@@ -256,11 +256,11 @@ public class MoveFinder {
             // Move-level futility pruning at frontier (depth 1), after we know if it gives check:
             if (!inCheckNow && !nearMateBounds && depth == 1 && isQuietMove && !givesCheck) {
                 // ensure staticEval available
-                if (!haveStaticEval) { staticEval = Evaluation.evaluation(board, isWhite); haveStaticEval = true; }
+                if (!haveStaticEval) { staticEval = Evaluation.evaluation(isWhite); haveStaticEval = true; }
                 int moveMargin = 150; // safety margin
                 if (staticEval + moveMargin <= alpha) {
                     // prune this quiet move
-                    undoMove(zug, board, info);
+                    undoMove(zug, info);
                     hash = oldHash;
                     moveIndex++;
                     continue;
@@ -274,7 +274,7 @@ public class MoveFinder {
             int child;
             if (firstMove) {
                 // Principal variation move: full-window search
-                child = -negamax(board, depth - 1, -beta, -alpha, !isWhite, hash);
+                child = -negamax(depth - 1, -beta, -alpha, !isWhite, hash);
             } else {
                 // PVS for later moves: start with null-window, possibly reduced by LMR
                 boolean applyLMR = nonPV && !inCheckNow && depth >= 3 && moveIndex >= 3 && isQuietMove && !givesCheck;
@@ -283,17 +283,17 @@ public class MoveFinder {
                 if (searchDepth < 1) searchDepth = depth - 1; // safety
 
                 // Null-window probe
-                child = -negamax(board, searchDepth, -alpha - 1, -alpha, !isWhite, hash);
+                child = -negamax(searchDepth, -alpha - 1, -alpha, !isWhite, hash);
 
                 // If raised alpha in reduced probe, re-search
                 if (child > alpha) {
                     // If reduced, re-search at full depth null-window first
                     if (r > 0 && (depth - 1) >= 1) {
-                        child = -negamax(board, depth - 1, -alpha - 1, -alpha, !isWhite, hash);
+                        child = -negamax(depth - 1, -alpha - 1, -alpha, !isWhite, hash);
                     }
                     // If still raises alpha and not fail-high, re-search full window
                     if (child > alpha && child < beta) {
-                        child = -negamax(board, depth - 1, -beta, -alpha, !isWhite, hash);
+                        child = -negamax(depth - 1, -beta, -alpha, !isWhite, hash);
                     }
                 }
             }
@@ -303,7 +303,7 @@ public class MoveFinder {
                 bestMove = zug;
             }
 
-            undoMove(zug, board, info);
+            undoMove(zug, info);
             hash = oldHash;
 
             alpha = Math.max(alpha, value);
@@ -331,12 +331,12 @@ public class MoveFinder {
         return value;
     }
 
-    public static int qSearch(Piece [][] board, int alpha, int beta, boolean isWhite, long hash){
+    public static int qSearch(int alpha, int beta, boolean isWhite, long hash){
         
         if (System.currentTimeMillis() >= searchEndTimeMs) {
             timeUp = true;
             depthAborted = true;
-            return Evaluation.evaluation(board, isWhite);
+            return Evaluation.evaluation(isWhite);
         }
         
         // Near mate bounds guard for pruning heuristics
@@ -349,7 +349,7 @@ public class MoveFinder {
 
         int alphaOrig = alpha;
 
-        int best_value = Evaluation.evaluation(board, isWhite);
+        int best_value = Evaluation.evaluation(isWhite);
         
         if( best_value >= beta ) {
             return best_value;
@@ -361,7 +361,7 @@ public class MoveFinder {
         // Detect if side to move is in check – disable delta pruning if so
         boolean inCheckNow = Board.bitboards.inCheck(isWhite);
         
-        ArrayList<Zug> moves = possibleMoves(isWhite, board);
+        ArrayList<Zug> moves = possibleMoves(isWhite);
 
         moves.removeIf(zug -> !Board.bitboards.isLegalMove(zug, isWhite));
 
@@ -380,7 +380,7 @@ public class MoveFinder {
                 forcingMoves.add(zug);
         }
 
-        MoveOrdering.orderMoves(forcingMoves, board, isWhite);
+        MoveOrdering.orderMoves(forcingMoves, isWhite);
 
         // If we have a TT entry for this node, try its best move first
         if (entry != null && entry.isValid && entry.bestMove != null) {
@@ -419,15 +419,15 @@ public class MoveFinder {
                 }
             }
         
-            MoveInfo info = saveMoveInfo(zug, board);
+            MoveInfo info = saveMoveInfo(zug);
         
             long oldHash = hash;
         
-            hash = doMoveUpdateHash(zug, board, info, hash);
+            hash = doMoveUpdateHash(zug, info, hash);
         
-            int score = -qSearch(board, -beta, -alpha, !isWhite, hash);
+            int score = -qSearch(-beta, -alpha, !isWhite, hash);
         
-            undoMove(zug, board, info);
+            undoMove(zug, info);
         
             hash = oldHash;
 
@@ -467,7 +467,7 @@ public class MoveFinder {
     }
 
 
-    public static long doMoveUpdateHash(Zug zug, Piece[][] board, MoveInfo info, long hash) {
+    public static long doMoveUpdateHash(Zug zug, MoveInfo info, long hash) {
 
         // Use bitboards for castle rights and en-passant file to avoid relying on mirror flags
         boolean[] castleRightsBefore = rightsFromMask(Board.bitboards.rightsMask());
@@ -475,24 +475,24 @@ public class MoveFinder {
         boolean moverWhiteForHash = (Board.bitboards.occW & (1L << fromSqForColor)) != 0L;
         int epBefore = Zobrist.getEnPassantFileFromBB(Board.bitboards, moverWhiteForHash);
 
-        doMoveNoHash(zug, board, info);
+        doMoveNoHash(zug, info);
 
         boolean[] castleRightsAfter = rightsFromMask(Board.bitboards.rightsMask());
         int epAfter = Zobrist.getEnPassantFileFromBB(Board.bitboards, !moverWhiteForHash);
 
-        hash = Zobrist.updateHash(hash, zug, info, board, castleRightsBefore, castleRightsAfter, epBefore, epAfter);
+        hash = Zobrist.updateHash(hash, zug, info, castleRightsBefore, castleRightsAfter, epBefore, epAfter);
 
         return hash;
     }
 
-    public static long doNullMoveUpdateHash(Piece [][] board, long hash, NullState ns) {
+    public static long doNullMoveUpdateHash(long hash, NullState ns) {
         // Save old EP file from bitboards and clear EP for null move
         ns.oldEpSquare = Board.bitboards.epSquare;
         Board.bitboards.epSquare = -1;
         return Zobrist.nullMoveHashUpdate(hash, ns.oldEpSquare == -1 ? -1 : Bitboards.xOf(ns.oldEpSquare));
     }
 
-    public static void undoNullMove(Piece [][] board, NullState ns) {
+    public static void undoNullMove(NullState ns) {
         // Restore previous EP square in bitboards (no mirror flags needed)
         Board.bitboards.epSquare = ns.oldEpSquare;
     }
@@ -502,11 +502,11 @@ public class MoveFinder {
         int oldEpSquare; // -1 or 0..63 square that was EP target before null move
     }
 
-    public static MoveInfo saveMoveInfo(Zug zug, Piece[][] board) {
+    public static MoveInfo saveMoveInfo(Zug zug) {
         // Bitboard-driven make/undo will populate MoveInfo fields as needed.
         return new MoveInfo();
     }
-    public static void undoMove(Zug zug, Piece[][] board, MoveInfo info) {
+    public static void undoMove(Zug zug, MoveInfo info) {
         // Undo on bitboards (also mirrors to Board.brett)
         Board.bitboards.undoMove(zug, info);
 
@@ -514,13 +514,13 @@ public class MoveFinder {
     }
 
     // Time-limited iterative deepening; search runs until deadline and returns best-so-far
-    public static Zug iterativeDeepening (Piece[][] board, boolean isWhite, long hash, long timeLimitMs){
+    public static Zug iterativeDeepening (boolean isWhite, long hash, long timeLimitMs){
         setSearchDeadline(System.currentTimeMillis() + Math.max(1, timeLimitMs));
 
-        ArrayList<Zug> order = possibleMoves(isWhite, board);
+        ArrayList<Zug> order = possibleMoves(isWhite);
         if (order.isEmpty()) return null;
 
-        MoveOrdering.orderMoves(order, board, isWhite);
+        MoveOrdering.orderMoves(order, isWhite);
 
         Zug bestSoFar = order.getFirst();
         int previousScore = 0;
@@ -536,13 +536,13 @@ public class MoveFinder {
             SearchResult result;
 
             if (depth == 1 || !hasPreviousScore) {
-                result = findBestMovesWithAspirationWindow(board, depth, isWhite, order, hash, Integer.MIN_VALUE + 1, Integer.MAX_VALUE - 1);
+                result = findBestMovesWithAspirationWindow(depth, isWhite, order, hash, Integer.MIN_VALUE + 1, Integer.MAX_VALUE - 1);
             } else {
                 final int ASPIRATION_WINDOW = 50;
                 int alpha = previousScore - ASPIRATION_WINDOW;
                 int beta = previousScore + ASPIRATION_WINDOW;
 
-                result = searchWithAspirationWindowRetries(board, depth, isWhite, order, hash, alpha, beta, previousScore);
+                result = searchWithAspirationWindowRetries(depth, isWhite, order, hash, alpha, beta, previousScore);
             }
 
             if (result.hasScore && !result.moves.isEmpty()) {
@@ -570,17 +570,17 @@ public class MoveFinder {
     }
 
     // Helper method to handle aspiration window retries on fail-high/fail-low
-    private static SearchResult searchWithAspirationWindowRetries(Piece[][] board, int depth, boolean isWhite, ArrayList<Zug> order, long hash, int alpha, int beta, int expectedScore) {
-        SearchResult result = findBestMovesWithAspirationWindow(board, depth, isWhite, order, hash, alpha, beta);
+    private static SearchResult searchWithAspirationWindowRetries(int depth, boolean isWhite, ArrayList<Zug> order, long hash, int alpha, int beta, int expectedScore) {
+        SearchResult result = findBestMovesWithAspirationWindow(depth, isWhite, order, hash, alpha, beta);
 
         // If we have a score and it's outside our aspiration window, we need to re-search with wider window
         if (result.hasScore) {
             if (result.bestScore <= alpha) {
                 // Fail low - research with lowered alpha
-                return findBestMovesWithAspirationWindow(board, depth, isWhite, order, hash, Integer.MIN_VALUE + 1, beta);
+                return findBestMovesWithAspirationWindow(depth, isWhite, order, hash, Integer.MIN_VALUE + 1, beta);
             } else if (result.bestScore >= beta) {
                 // Fail high - research with raised beta
-                return findBestMovesWithAspirationWindow(board, depth, isWhite, order, hash, alpha, Integer.MAX_VALUE - 1);
+                return findBestMovesWithAspirationWindow(depth, isWhite, order, hash, alpha, Integer.MAX_VALUE - 1);
             }
         }
 
@@ -592,12 +592,12 @@ public class MoveFinder {
     }
 
     // Fixed-depth search utility used for low-time situations
-    public static Zug searchToDepth(Piece[][] board, boolean isWhite, long hash, int depth) {
+    public static Zug searchToDepth(boolean isWhite, long hash, int depth) {
         setSearchDeadline(Long.MAX_VALUE);
-        ArrayList<Zug> order = possibleMoves(isWhite, board);
+        ArrayList<Zug> order = possibleMoves(isWhite);
         if (order.isEmpty()) return null;
 
-        MoveOrdering.orderMoves(order, board, isWhite);
+        MoveOrdering.orderMoves(order, isWhite);
 
         int prevScore = 0;
         boolean hasPreviousScore = false;
@@ -610,14 +610,14 @@ public class MoveFinder {
 
             if (depth == 1 || !hasPreviousScore) {
                 // First depth or no previous score - use full window
-                result = findBestMovesWithAspirationWindow(board, depth, isWhite, order, hash, Integer.MIN_VALUE + 1, Integer.MAX_VALUE - 1);
+                result = findBestMovesWithAspirationWindow(depth, isWhite, order, hash, Integer.MIN_VALUE + 1, Integer.MAX_VALUE - 1);
             } else {
                 // Use aspiration window based on previous score
                 final int ASPIRATION_WINDOW = 50;
                 int alpha = prevScore - ASPIRATION_WINDOW;
                 int beta = prevScore + ASPIRATION_WINDOW;
 
-                result = searchWithAspirationWindowRetries(board, depth, isWhite, order, hash, alpha, beta, prevScore);
+                result = searchWithAspirationWindowRetries(depth, isWhite, order, hash, alpha, beta, prevScore);
             }
 
             // Adopt improvements found so far at this depth
@@ -635,7 +635,7 @@ public class MoveFinder {
         return bestSoFar;
     }
 
-    public static void doMoveNoHash(Zug zug, Piece[][] board, MoveInfo info) {
+    public static void doMoveNoHash(Zug zug, MoveInfo info) {
 
         // Apply move using bitboards (also mirrors to Board.brett)
         Board.bitboards.applyMove(zug, info);

@@ -21,27 +21,27 @@ public class PerftMoveGenTest {
     public static void perftDivide(Piece [][] board, int depth, boolean isWhite, long hash) throws NoSuchAlgorithmException {
         startTime = System.currentTimeMillis();
 
-        ArrayList<Zug> moves = MoveFinder.possibleMoves(isWhite, board);
+        ArrayList<Zug> moves = MoveFinder.possibleMoves(isWhite);
 
         moves.removeIf(zug -> !Board.bitboards.isLegalMove(zug, isWhite));
 
-        MoveOrdering.orderMoves(moves, board, isWhite);
+        MoveOrdering.orderMoves(moves, isWhite);
 
         int total = 0;
         for (Zug zug : moves) {
             long oldHash = hash;
-            MoveInfo info = MoveFinder.saveMoveInfo(zug, null);
+            MoveInfo info = MoveFinder.saveMoveInfo(zug);
 
-            long newHash = MoveFinder.doMoveUpdateHash(zug, null, info, oldHash);
+            long newHash = MoveFinder.doMoveUpdateHash(zug, info, oldHash);
             long recomputed = Zobrist.computeHash(Board.bitboards, !isWhite);
             if (newHash != recomputed) {
                 throw new RuntimeException("Hash mismatch at root move " + zug.processZug() + ": newHash=" + newHash + ", recomputed=" + recomputed);
             }
 
-            int nodes = perft(null, depth - 1, !isWhite, newHash);
+            int nodes = perft(depth - 1, !isWhite, newHash);
             System.out.println(zug.processZug() + ": " + nodes);
 
-            MoveFinder.undoMove(zug, null, info);
+            MoveFinder.undoMove(zug, info);
             total += nodes;
         }
         long elapsed = System.currentTimeMillis() - startTime;
@@ -53,28 +53,28 @@ public class PerftMoveGenTest {
         System.out.println("Total: " + total);
     }
 
-    private static int perft(Piece [][] board, int depth, boolean isWhite, long hash) {
+    private static int perft(int depth, boolean isWhite, long hash) {
         if (depth == 0) return 1;
 
-        ArrayList<Zug> moves = MoveFinder.possibleMoves(isWhite, board);
+        ArrayList<Zug> moves = MoveFinder.possibleMoves(isWhite);
 
         moves.removeIf(zug -> !Board.bitboards.isLegalMove(zug, isWhite));
 
-        MoveOrdering.orderMoves(moves, board, isWhite);
+        MoveOrdering.orderMoves(moves, isWhite);
 
         int count = 0;
         for (Zug zug : moves) {
             long oldHash = hash;
-            MoveInfo info = MoveFinder.saveMoveInfo(zug, null);
-            long newHash = MoveFinder.doMoveUpdateHash(zug, null, info, oldHash);
+            MoveInfo info = MoveFinder.saveMoveInfo(zug);
+            long newHash = MoveFinder.doMoveUpdateHash(zug, info, oldHash);
 
             long recomputed = Zobrist.computeHash(Board.bitboards, !isWhite);
             if (newHash != recomputed) {
                 throw new RuntimeException("Hash mismatch at recursive move " + zug.processZug() + ": newHash=" + newHash + ", recomputed=" + recomputed);
             }
 
-            count += perft(null, depth - 1, !isWhite, newHash);
-            MoveFinder.undoMove(zug, null, info);
+            count += perft(depth - 1, !isWhite, newHash);
+            MoveFinder.undoMove(zug, info);
         }
         return count;
     }

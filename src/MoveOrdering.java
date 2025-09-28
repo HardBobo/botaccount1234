@@ -39,12 +39,12 @@ public class MoveOrdering {
         }
         return score;
     }
-    public static void orderMoves(ArrayList<Zug> moves, Piece[][] board, boolean isWhite) {
+    public static void orderMoves(ArrayList<Zug> moves, boolean isWhite) {
         // Züge nach ihrer Bewertung sortieren (absteigende Reihenfolge)
         moves.sort((move1, move2) -> {
-            int score1 = evaluateMove(move1, board, isWhite);
-            int score2 = evaluateMove(move2, board, isWhite);
-            return Integer.compare(score2, score1); // Absteigende Sortierung
+            int score1 = evaluateMove(move1, null, isWhite);
+            int score2 = evaluateMove(move2, null, isWhite);
+            return Integer.compare(score2, score1);
         });
     }
 }

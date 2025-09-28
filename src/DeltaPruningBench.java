@@ -34,7 +34,7 @@ public class DeltaPruningBench {
         // Run a fixed-depth search (depth 5)
         int depth = 5;
         long start = System.currentTimeMillis();
-        int score = MoveFinder.negamax(null, depth, Integer.MIN_VALUE / 2 + 1, Integer.MAX_VALUE / 2 - 1, whiteToMove, hash);
+        int score = MoveFinder.negamax(depth, Integer.MIN_VALUE / 2 + 1, Integer.MAX_VALUE / 2 - 1, whiteToMove, hash);
         long end = System.currentTimeMillis();
 
         long nodes = getLongStatic(MoveFinder.class, "nodeCount");
