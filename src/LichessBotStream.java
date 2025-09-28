@@ -286,12 +286,6 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                 || ("black".equals(myColor) && moveCount % 2 == 1);
     }
 
-    // Lichess liefert wtime/btime/winc/binc in Millisekunden. Keine Konvertierung nötig.
-    // Diese Methode bleibt für Kompatibilität bestehen, macht aber nichts mehr.
-    private static long normalizeMs(long v) {
-        return v;
-    }
-
     private static void doFirstMove(String gameId) throws IOException {
         Zug zug = Objects.requireNonNull(OpeningDictionary.getNextOpeningMove(""));
         playMove(gameId, zug.processZug());
