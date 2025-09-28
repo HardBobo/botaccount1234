@@ -55,21 +55,6 @@ public class Bitboards {
         updateOcc();
     }
 
-    public void syncFromBoard(Piece[][] board) {
-        clear();
-        for (int y = 0; y < 8; y++) {
-            for (int x = 0; x < 8; x++) {
-                Piece p = board[y][x];
-                if (p instanceof Empty) continue;
-                int t = p.getType();
-                long bit = 1L << sq(x, y);
-                if (p.isWhite()) w[t] |= bit; else b[t] |= bit;
-            }
-        }
-        updateOcc();
-        // Do not attempt to infer castling/EP from board[][]; these are set by FEN parse or move updates.
-    }
-
     public boolean isWhiteAt(int sq) { return (occW & bb(sq)) != 0; }
     public boolean isBlackAt(int sq) { return (occB & bb(sq)) != 0; }
     public boolean isOccupied(int sq) { return (occ & bb(sq)) != 0; }
@@ -384,18 +369,6 @@ public class Bitboards {
             case 'b' -> 2;
             case 'r' -> 3;
             default -> 4; // 'q' or default to queen
-        };
-    }
-
-    private static Piece pieceObject(int type, boolean white) {
-        return switch (type) {
-            case 0 -> new Bauer(white);
-            case 1 -> new Springer(white);
-            case 2 -> new Laeufer(white);
-            case 3 -> new Turm(white);
-            case 4 -> new Dame(white);
-            case 5 -> new Koenig(white);
-            default -> new Empty();
         };
     }
 }

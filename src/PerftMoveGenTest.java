@@ -15,10 +15,10 @@ public class PerftMoveGenTest {
         Zobrist.initZobrist();
         startHash = Zobrist.computeHash(Board.bitboards, true);
         
-        perftDivide(null, 5, true, startHash); // Will show all root moves and their node counts
+        perftDivide(5, true, startHash); // Will show all root moves and their node counts
     }
 
-    public static void perftDivide(Piece [][] board, int depth, boolean isWhite, long hash) throws NoSuchAlgorithmException {
+    public static void perftDivide(int depth, boolean isWhite, long hash) throws NoSuchAlgorithmException {
         startTime = System.currentTimeMillis();
 
         ArrayList<Zug> moves = MoveFinder.possibleMoves(isWhite);

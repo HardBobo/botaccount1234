@@ -7,7 +7,7 @@ public class MoveOrdering {
     public MoveOrdering() {
 
     }
-    private static int evaluateMove(Zug zug, Piece[][] board, boolean isWhite) {
+    private static int evaluateMove(Zug zug, boolean isWhite) {
         int score = 0;
         // Piece values based on bitboards
         int from = zug.startY * 8 + zug.startX;
@@ -42,8 +42,8 @@ public class MoveOrdering {
     public static void orderMoves(ArrayList<Zug> moves, boolean isWhite) {
         // Züge nach ihrer Bewertung sortieren (absteigende Reihenfolge)
         moves.sort((move1, move2) -> {
-            int score1 = evaluateMove(move1, null, isWhite);
-            int score2 = evaluateMove(move2, null, isWhite);
+            int score1 = evaluateMove(move1, isWhite);
+            int score2 = evaluateMove(move2, isWhite);
             return Integer.compare(score2, score1);
         });
     }
