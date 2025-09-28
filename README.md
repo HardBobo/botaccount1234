@@ -1,21 +1,22 @@
-Project Overview
+# Project Overview
 This is a Java chess engine and Lichess bot named "botaccount1234" that:
 
 Connects to Lichess via streaming API to play automated chess games
 Uses negamax algorithm with alpha-beta pruning for move search
 Implements opening book from grandmaster games
 Supports all chess rules including castling, en passant, and promotion
-Development Commands
+
+# Development Commands
 Building and Running
-# First-time setup (Windows)
+#First-time setup (Windows)
 .\setup.ps1
 
 # Compile the project (from IntelliJ or command line)
 javac -cp "path/to/json-20240303.jar" src/*.java -d out/
 
 # Configure your bot token (choose one method):
-# Method 1: Edit bot.properties file with your token
-# Method 2: Set environment variable
+Method 1: Edit bot.properties file with your token
+Method 2: Set environment variable
 $env:LICHESS_BOT_TOKEN = "your_actual_token_here"
 
 # Run the Lichess bot (main entry point)
