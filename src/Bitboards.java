@@ -176,6 +176,14 @@ public class Bitboards {
         return ok;
     }
 
+    public boolean onlyHasPawns(boolean white) {
+        if (white) {
+            return (w[1] | w[2] | w[3] | w[4]) == 0L;
+        } else {
+            return (b[1] | b[2] | b[3] | b[4]) == 0L;
+        }
+    }
+
     // Apply a move to bitboards and mirror Board.brett, recording info for undo and hashing
     public void applyMove(Zug z, MoveInfo info) {
         int from = z.startY * 8 + z.startX;
@@ -184,14 +192,20 @@ public class Bitboards {
         
 
         boolean moverWhite = isWhiteAt(from);
-        info.movingPiece = pieceObject(pieceTypeAt(from, moverWhite), moverWhite);
-        info.squareMovedOnto = isOccupied(to) ? pieceObject(pieceTypeAt(to), isWhiteAt(to)) : new Empty();
+        info.movingPieceWhite = moverWhite;
+        info.movingPieceType = pieceTypeAt(from, moverWhite);
+        info.squareMovedOntoWasEmpty = !isOccupied(to);
+        if (!info.squareMovedOntoWasEmpty) {
+            boolean capW = isWhiteAt(to);
+            info.capturedPieceWhite = capW;
+            info.capturedPieceType = pieceTypeAt(to, capW);
+        }
 
         // Save pre-move state to info for undo
         info.oldCastlingRightsMask = rightsMask();
         info.oldEpSquare = epSquare;
 
-        int movingType = pieceTypeAt(from, moverWhite);
+        int movingType = info.movingPieceType;
         boolean isCapture = isOccupied(to);
 
         // En passant detection (target square empty but pawn moves diagonally into epSquare)
@@ -201,21 +215,17 @@ public class Bitboards {
             isEnPassant = true;
             capturedSq = moverWhite ? (to + 8) : (to - 8);
             info.wasEnPassant = true;
-            info.capturedPiece = pieceObject(0, !moverWhite);
+            info.capturedPieceType = 0;
+            info.capturedPieceWhite = !moverWhite;
             info.capEnPassantBauerCoords = new Koordinaten(xOf(capturedSq), yOf(capturedSq));
+            info.squareMovedOntoWasEmpty = true;
         }
 
         // Promotion detection
         boolean willPromote = (movingType == 0) && isPromotionDest(moverWhite, to) && (z.promoteTo == 'q' || z.promoteTo == 'r' || z.promoteTo == 'b' || z.promoteTo == 'n');
         if (willPromote) {
             info.wasPromotion = true;
-            info.promotionPiece = switch (z.promoteTo) {
-                case 'q' -> new Dame(moverWhite);
-                case 'r' -> new Turm(moverWhite);
-                case 'b' -> new Laeufer(moverWhite);
-                case 'n' -> new Springer(moverWhite);
-                default -> null;
-            };
+            info.promotionType = promoTypeFromChar(z.promoteTo);
         }
 
         // Castling detection
@@ -308,15 +318,15 @@ public class Bitboards {
     public void undoMove(Zug z, MoveInfo info) {
         int from = z.startY * 8 + z.startX;
         int to = z.endY * 8 + z.endX;
-        boolean moverWhite = isWhiteAt(to) || (info.wasPromotion && isWhiteAt(to));
-        int movingType = pieceTypeAt(to, moverWhite);
+        boolean moverWhite = info.movingPieceWhite;
+        int movingType = info.movingPieceType;
 
         // Undo promotion: remove promoted piece and restore pawn at from
         boolean wasPromotion = info.wasPromotion;
         if (wasPromotion) {
-            // Remove promoted piece at to
-            if (moverWhite) w[movingType] &= ~bb(to); else b[movingType] &= ~bb(to);
-            // Restore pawn at from
+            // Remove promoted piece at to (promotionType), restore pawn at from
+            int promoType = info.promotionType;
+            if (moverWhite) w[promoType] &= ~bb(to); else b[promoType] &= ~bb(to);
             if (moverWhite) w[0] |= bb(from); else b[0] |= bb(from);
         } else {
             // Move piece back from 'to' to 'from'
@@ -330,9 +340,9 @@ public class Bitboards {
             // Place captured pawn back
             if (moverWhite) b[0] |= bb(capSq); else w[0] |= bb(capSq);
             // Clear destination implicitly by moving piece bits
-        } else if (!(info.squareMovedOnto instanceof Empty)) {
-            boolean capWhite = info.squareMovedOnto.isWhite();
-            int capType = info.squareMovedOnto.getType();
+        } else if (!info.squareMovedOntoWasEmpty) {
+            boolean capWhite = info.capturedPieceWhite;
+            int capType = info.capturedPieceType;
             if (capWhite) w[capType] |= bb(to); else b[capType] |= bb(to);
         } else {
             // destination restored implicitly

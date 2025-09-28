@@ -214,7 +214,7 @@ public class MoveFinder {
         // Null Move Pruning (guard against consecutive null, pawn-only, in-check, and near-mate bounds)
         // Adaptive reduction: r = 2 normally, r = 3 for deeper nodes
         int nmpR = 2 + (depth >= 7 ? 1 : 0);
-        if (canNull && nonPV && !inCheckNow && !nearMateBounds && !PieceTracker.onlyHasPawns(isWhite) && depth >= (nmpR + 1)) {
+        if (canNull && nonPV && !inCheckNow && !nearMateBounds && !Board.bitboards.onlyHasPawns(isWhite) && depth >= (nmpR + 1)) {
 
             long oldHash = hash;
             NullState ns = new  NullState();

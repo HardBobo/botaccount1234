@@ -29,14 +29,19 @@ public class PerftMoveGenTest {
 
         int total = 0;
         for (Zug zug : moves) {
-            MoveInfo info = MoveFinder.saveMoveInfo(zug, board);
-            
-            MoveFinder.doMoveUpdateHash(zug, board, info, hash);
+            long oldHash = hash;
+            MoveInfo info = MoveFinder.saveMoveInfo(zug, null);
 
-            int nodes = perft(board, depth - 1, !isWhite, hash);
+            long newHash = MoveFinder.doMoveUpdateHash(zug, null, info, oldHash);
+            long recomputed = Zobrist.computeHash(Board.bitboards, !isWhite);
+            if (newHash != recomputed) {
+                throw new RuntimeException("Hash mismatch at root move " + zug.processZug() + ": newHash=" + newHash + ", recomputed=" + recomputed);
+            }
+
+            int nodes = perft(null, depth - 1, !isWhite, newHash);
             System.out.println(zug.processZug() + ": " + nodes);
 
-            MoveFinder.undoMove(zug, board, info);
+            MoveFinder.undoMove(zug, null, info);
             total += nodes;
         }
         long elapsed = System.currentTimeMillis() - startTime;
@@ -59,11 +64,17 @@ public class PerftMoveGenTest {
 
         int count = 0;
         for (Zug zug : moves) {
-            MoveInfo info = MoveFinder.saveMoveInfo(zug, board);
-            MoveFinder.doMoveUpdateHash(zug, board, info, hash);
+            long oldHash = hash;
+            MoveInfo info = MoveFinder.saveMoveInfo(zug, null);
+            long newHash = MoveFinder.doMoveUpdateHash(zug, null, info, oldHash);
 
-            count += perft(board, depth - 1, !isWhite, hash);
-            MoveFinder.undoMove(zug, board, info);
+            long recomputed = Zobrist.computeHash(Board.bitboards, !isWhite);
+            if (newHash != recomputed) {
+                throw new RuntimeException("Hash mismatch at recursive move " + zug.processZug() + ": newHash=" + newHash + ", recomputed=" + recomputed);
+            }
+
+            count += perft(null, depth - 1, !isWhite, newHash);
+            MoveFinder.undoMove(zug, null, info);
         }
         return count;
     }

@@ -48,43 +48,7 @@ public class Zobrist {
     public static long getSideToMoveKey() {
         return sideToMoveKey;
     }
-    public static long computeHash(Piece[][] board, boolean whiteToMove) {
-        long hash = 0L;
-
-        // Figuren auf dem Brett
-        for (int y = 0; y < 8; y++) {
-            for (int x = 0; x < 8; x++) {
-                Piece p = board[y][x];
-                if (!(p instanceof Empty)) {
-                    int pieceIndex = getPieceIndex(p); // eigene Methode unten
-                    int squareIndex = y * 8 + x;       // 0..63
-                    hash ^= Zobrist.getPieceSquareKey(pieceIndex, squareIndex);
-                }
-            }
-        }
-
-        // Seite am Zug
-        if (whiteToMove) {
-            hash ^= Zobrist.getSideToMoveKey();
-        }
-
-        // Rochaderechte (castleRights = [whiteShort, whiteLong, blackShort, blackLong])
-        boolean [] castleRights = Spiel.getCastleRights(board);
-        for (int i = 0; i < 4; i++) {
-            if (castleRights[i]) {
-                hash ^= Zobrist.getCastleKey(i);
-            }
-        }
-
-        // En-Passant (falls vorhanden, -1 wenn keiner)
-        int enPassantFile = getEnPassantFile(board, whiteToMove);
-
-        if (enPassantFile >= 0) {
-            hash ^= Zobrist.getEnPassantKey(enPassantFile);
-        }
-
-        return hash;
-    }
+    // computeHash(Piece[][]) removed in bitboard-only refactor
 
     public static long computeHash(Bitboards bb, boolean whiteToMove) {
         long hash = 0L;
@@ -135,21 +99,20 @@ public class Zobrist {
         int fromSq = zug.startY * 8 + zug.startX;
         int toSq   = zug.endY * 8 + zug.endX;
 
-        Piece moving = info.movingPiece;
-        int movingIndex = getPieceIndex(moving);
+        int movingIndex = (info.movingPieceWhite ? 0 : 6) + info.movingPieceType;
 
         if (!info.wasPromotion) {
             hash ^= getPieceSquareKey(movingIndex, fromSq);
             hash ^= getPieceSquareKey(movingIndex, toSq);
         } else {
             hash ^= getPieceSquareKey(movingIndex, fromSq);
-            int promotionPieceIndex = getPieceIndex(info.promotionPiece);
+            int promotionPieceIndex = (info.movingPieceWhite ? 0 : 6) + info.promotionType;
             hash ^= getPieceSquareKey(promotionPieceIndex, toSq);
         }
 
         if (info.rookMoved) {
             // rook color equals king's color (moving piece)
-            int rookIndex = moving.isWhite() ? 3 : 9; // base 0 or 6 + 3 for rook
+            int rookIndex = info.movingPieceWhite ? 3 : 9; // base 0 or 6 + 3 for rook
             int rToSq = zug.endY * 8 + info.rookEndX;
             int rFromSq = zug.endY * 8 + info.rookStartX;
             hash ^=  Zobrist.getPieceSquareKey(rookIndex, rFromSq);
@@ -159,13 +122,11 @@ public class Zobrist {
 //        System.out.println("Hash nach Rochade: " + hash);
 
         // geschlagene Figur (falls vorhanden)
-        if (!(info.squareMovedOnto instanceof Empty)) {
-            Piece captured = info.squareMovedOnto;
-            int capturedIndex = getPieceIndex(captured);
+        if (!info.squareMovedOntoWasEmpty && !info.wasEnPassant) {
+            int capturedIndex = (info.capturedPieceWhite ? 0 : 6) + info.capturedPieceType;
             hash ^= getPieceSquareKey(capturedIndex, toSq);
         } else if (info.wasEnPassant) {
-            Piece captured = info.capturedPiece;
-            int capturedIndex = getPieceIndex(captured);
+            int capturedIndex = (info.capturedPieceWhite ? 0 : 6) + 0; // pawn
             int capSq = info.capEnPassantBauerCoords.y * 8 + info.capEnPassantBauerCoords.x;
             hash ^= getPieceSquareKey(capturedIndex, capSq);
         }
@@ -198,49 +159,8 @@ public class Zobrist {
         return hash;
     }
 
-    public static int getPieceIndex(Piece p) {
-        int base = p.isWhite() ? 0 : 6;
-        return switch (p) {
-            case Bauer bauer -> base;
-            case Springer springer -> base + 1;
-            case Laeufer laeufer -> base + 2;
-            case Turm turm -> base + 3;
-            case Dame dame -> base + 4;
-            case Koenig koenig -> base + 5;
-            default -> throw new IllegalArgumentException("Unbekannte Figur: " + p);
-        };
-    }
+    // getPieceIndex(Piece) removed in bitboard-only refactor
 
-    public static int getEnPassantFile(Piece[][] board, boolean whiteToMove) {
-        // -1 = kein En Passant möglich
-        int enPassantFile = -1;
-
-        // Nur relevanter Rank: weiße Bauern auf 4, schwarze auf 3
-        int targetRank = whiteToMove ? 3 : 4;
-
-        for (int x = 0; x < 8; x++) {
-            Piece p = board[targetRank][x];
-
-            if (p instanceof Bauer b && b.isEnPassantPossible()) {
-                // Prüfen, ob Gegner auf Nachbarfile steht
-                int adjLeft = x - 1;
-                int adjRight = x + 1;
-
-                boolean capturePossible =
-                        (adjLeft >= 0 && board[targetRank][adjLeft] instanceof Bauer b2 &&
-                                b2.isWhite() != p.isWhite())
-                                || (adjRight <= 7 && board[targetRank][adjRight] instanceof Bauer b3 &&
-                                b3.isWhite() != p.isWhite());
-
-                if (capturePossible) {
-                    enPassantFile = x;
-                    break; // nur ein En-Passant-File gleichzeitig erlaubt
-                }
-            }
-        }
-
-        return enPassantFile;
-    }
 
     public static int getEnPassantFileFromBB(Bitboards bb, boolean whiteToMove) {
         if (bb.epSquare == -1) return -1;
@@ -253,13 +173,6 @@ public class Zobrist {
         return -1;
     }
 
-    public static long nullMoveHashUpdate(long hash, Koordinaten ep) {
-        if(ep != null) {
-            hash ^= enPassantKeys[ep.x];
-        }
-        hash ^= sideToMoveKey;
-        return hash;
-    }
     public static long nullMoveHashUpdate(long hash, int epFile) {
         if (epFile >= 0 && epFile < 8) {
             hash ^= enPassantKeys[epFile];

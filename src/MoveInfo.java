@@ -1,20 +1,26 @@
 public class MoveInfo {
-    public MoveInfo(){
+    public MoveInfo(){ }
 
-    }
-    public Piece squareMovedOnto;
-    public boolean wasFirstMove;
+    // Moving piece (type 0..5) and color
+    public int movingPieceType;
+    public boolean movingPieceWhite;
+
+    // Capture info; if squareMovedOntoWasEmpty is true and wasEnPassant is false, then no capture
+    public boolean squareMovedOntoWasEmpty;
+    public int capturedPieceType; // valid if capture
+    public boolean capturedPieceWhite; // valid if capture
+
+    // Castling rook movement (if any)
     public boolean rookMoved;
     public int rookStartX, rookEndX;
-    public Piece movingPiece;
-    public Koordinaten enPassantBauerCoords;
-    public boolean wasEnPassantCapturable;
-    public long oldHash;
-    public Piece capturedPiece;
-    public Koordinaten capEnPassantBauerCoords;
+
+    // En passant flags
     public boolean wasEnPassant;
+    public Koordinaten capEnPassantBauerCoords; // square of captured pawn in EP
+
+    // Promotion flags
     public boolean wasPromotion;
-    public Piece promotionPiece;
+    public int promotionType; // 0..5 for promoted piece type
 
     // Bitboard-related bookkeeping for undo/hash
     public int oldCastlingRightsMask; // bitmask (wK=1,wQ=2,bK=4,bQ=8)
