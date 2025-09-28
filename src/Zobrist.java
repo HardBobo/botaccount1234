@@ -76,13 +76,49 @@ public class Zobrist {
             }
         }
 
-        // En passant (falls vorhanden, -1 wenn keiner)
+        // En-Passant (falls vorhanden, -1 wenn keiner)
         int enPassantFile = getEnPassantFile(board, whiteToMove);
 
         if (enPassantFile >= 0) {
             hash ^= Zobrist.getEnPassantKey(enPassantFile);
         }
 
+        return hash;
+    }
+
+    public static long computeHash(Bitboards bb, boolean whiteToMove) {
+        long hash = 0L;
+        // Pieces: white indices 0..5, black 6..11 matching getPieceIndex mapping
+        for (int type = 0; type < 6; type++) {
+            long wbb = bb.w[type];
+            while (wbb != 0) {
+                int sq = Long.numberOfTrailingZeros(wbb);
+                wbb &= wbb - 1;
+                int pieceIndex = type; // white base 0
+                hash ^= Zobrist.getPieceSquareKey(pieceIndex, sq);
+            }
+            long bbb = bb.b[type];
+            while (bbb != 0) {
+                int sq = Long.numberOfTrailingZeros(bbb);
+                bbb &= bbb - 1;
+                int pieceIndex = 6 + type; // black base 6
+                hash ^= Zobrist.getPieceSquareKey(pieceIndex, sq);
+            }
+        }
+
+        if (whiteToMove) {
+            hash ^= Zobrist.getSideToMoveKey();
+        }
+        // Castling rights in order [whiteShort, whiteLong, blackShort, blackLong]
+        if (bb.wK) hash ^= Zobrist.getCastleKey(0);
+        if (bb.wQ) hash ^= Zobrist.getCastleKey(1);
+        if (bb.bK) hash ^= Zobrist.getCastleKey(2);
+        if (bb.bQ) hash ^= Zobrist.getCastleKey(3);
+
+        int epFile = getEnPassantFileFromBB(bb, whiteToMove);
+        if (epFile >= 0) {
+            hash ^= Zobrist.getEnPassantKey(epFile);
+        }
         return hash;
     }
 
@@ -103,9 +139,7 @@ public class Zobrist {
         int movingIndex = getPieceIndex(moving);
 
         if (!info.wasPromotion) {
-            // Figur vom Startfeld entfernen
             hash ^= getPieceSquareKey(movingIndex, fromSq);
-            // Figur auf Zielfeld hinzufügen
             hash ^= getPieceSquareKey(movingIndex, toSq);
         } else {
             hash ^= getPieceSquareKey(movingIndex, fromSq);
@@ -113,11 +147,9 @@ public class Zobrist {
             hash ^= getPieceSquareKey(promotionPieceIndex, toSq);
         }
 
-//        System.out.println("Hash nach bewegen der Figur: " + hash);
-
         if (info.rookMoved) {
-            Piece rook = board[zug.endY][info.rookEndX];
-            int rookIndex = getPieceIndex(rook);
+            // rook color equals king's color (moving piece)
+            int rookIndex = moving.isWhite() ? 3 : 9; // base 0 or 6 + 3 for rook
             int rToSq = zug.endY * 8 + info.rookEndX;
             int rFromSq = zug.endY * 8 + info.rookStartX;
             hash ^=  Zobrist.getPieceSquareKey(rookIndex, rFromSq);
@@ -131,13 +163,11 @@ public class Zobrist {
             Piece captured = info.squareMovedOnto;
             int capturedIndex = getPieceIndex(captured);
             hash ^= getPieceSquareKey(capturedIndex, toSq);
-        } else {
-            if(info.wasEnPassant) {
-                Piece captured = info.capturedPiece;
-                int capturedIndex = getPieceIndex(captured);
-                int capSq = info.capEnPassantBauerCoords.y * 8 + info.capEnPassantBauerCoords.x;
-                hash ^= getPieceSquareKey(capturedIndex, capSq);
-            }
+        } else if (info.wasEnPassant) {
+            Piece captured = info.capturedPiece;
+            int capturedIndex = getPieceIndex(captured);
+            int capSq = info.capEnPassantBauerCoords.y * 8 + info.capEnPassantBauerCoords.x;
+            hash ^= getPieceSquareKey(capturedIndex, capSq);
         }
 
 
@@ -212,9 +242,27 @@ public class Zobrist {
         return enPassantFile;
     }
 
+    public static int getEnPassantFileFromBB(Bitboards bb, boolean whiteToMove) {
+        if (bb.epSquare == -1) return -1;
+        int colorIndex = whiteToMove ? 0 : 1;
+        long pawns = whiteToMove ? bb.w[0] : bb.b[0];
+        long attackers = Attacks.pawnAttack[colorIndex][bb.epSquare] & pawns;
+        if (attackers != 0L) {
+            return Bitboards.xOf(bb.epSquare);
+        }
+        return -1;
+    }
+
     public static long nullMoveHashUpdate(long hash, Koordinaten ep) {
         if(ep != null) {
             hash ^= enPassantKeys[ep.x];
+        }
+        hash ^= sideToMoveKey;
+        return hash;
+    }
+    public static long nullMoveHashUpdate(long hash, int epFile) {
+        if (epFile >= 0 && epFile < 8) {
+            hash ^= enPassantKeys[epFile];
         }
         hash ^= sideToMoveKey;
         return hash;

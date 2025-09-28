@@ -221,7 +221,7 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                                                             best = panicBest(isWhite);
                                                     } else {
                                                         long thinkMs = TimeManager.computeThinkTimeMs(timeLeft, incMs);
-                                                        best = MoveFinder.iterativeDeepening(Board.brett, true, startHash, thinkMs);
+                                                        best = MoveFinder.iterativeDeepening(null, true, startHash, thinkMs);
                                                     }
                                                     playMove(gameId, best.processZug());
                                                 }
@@ -240,7 +240,7 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                                                         best = panicBest(isWhite);
                                                     } else {
                                                         long thinkMs = TimeManager.computeThinkTimeMs(timeLeft, incMs);
-                                                        best = MoveFinder.iterativeDeepening(Board.brett, false, startHash, thinkMs);
+                                                        best = MoveFinder.iterativeDeepening(null, false, startHash, thinkMs);
                                                     }
                                                     playMove(gameId, best.processZug());
                                                 }
@@ -295,8 +295,8 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
     private static void doFirstMove(String gameId) throws IOException {
         Zug zug = Objects.requireNonNull(OpeningDictionary.getNextOpeningMove(""));
         playMove(gameId, zug.processZug());
-        MoveInfo info = MoveFinder.saveMoveInfo(zug, Board.brett);
-        startHash = MoveFinder.doMoveUpdateHash(zug, Board.brett, info, startHash);
+        MoveInfo info = MoveFinder.saveMoveInfo(zug, null);
+        startHash = MoveFinder.doMoveUpdateHash(zug, null, info, startHash);
         lastProcessedMoveCount++;
     }
 
@@ -320,13 +320,13 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
             Zug zug;
             for (int i = lastProcessedMoveCount; i < moveList.length; i++) {
                 String raw = moveList[i];
-                String norm = normalizeCastleUci(raw, Board.brett);
+                String norm = normalizeCastleUci(raw);
                 if (!raw.equals(norm)) {
                     System.out.println("[Sync] Normalized castling move: " + raw + " -> " + norm);
                 }
                 zug = new Zug(norm);
-                MoveInfo info = MoveFinder.saveMoveInfo(zug, Board.brett);
-                startHash = MoveFinder.doMoveUpdateHash(new Zug(norm), Board.brett, info, startHash);
+                MoveInfo info = MoveFinder.saveMoveInfo(zug, null);
+                startHash = MoveFinder.doMoveUpdateHash(new Zug(norm), null, info, startHash);
             }
             lastProcessedMoveCount = moveList.length;
         }
@@ -334,7 +334,7 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
 
     // Normalize non-standard castling like e8h8/e1a1 into e8g8/e1c1,
     // but ONLY if the starting square currently holds a king.
-    private static String normalizeCastleUci(String lan, Piece[][] board) {
+    private static String normalizeCastleUci(String lan) {
         if (lan == null || lan.length() < 4) return lan;
         char sFile = lan.charAt(0);
         char sRank = lan.charAt(1);
@@ -344,9 +344,10 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
         if (sFile == 'e' && (sRank == '1' || sRank == '8') && eRank == sRank && (eFile == 'h' || eFile == 'a')) {
             int startX = sFile - 'a'; // 0..7
             int startY = 8 - Character.getNumericValue(sRank); // rank '1' -> 7, '8' -> 0
-            
-            Piece p = board[startY][startX];
-            if (p instanceof Koenig) {
+            int sq = startY * 8 + startX;
+            boolean isWhite = (Board.bitboards.occW & (1L << sq)) != 0L;
+            int type = Board.bitboards.pieceTypeAt(sq, isWhite);
+            if (type == 5) {
                 char newFile = (eFile == 'h') ? 'g' : 'c';
                 String prefix = "" + sFile + sRank + newFile + eRank;
                 return (lan.length() > 4) ? prefix + lan.substring(4) : prefix;
@@ -366,9 +367,9 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
     }
 
     private static Zug panicBest(boolean whiteToMove){
-        return MoveFinder.searchToDepth(Board.brett, whiteToMove, startHash, 2);
+        return MoveFinder.searchToDepth(null, whiteToMove, startHash, 2);
     }
     private static Zug ultraPanicBest(boolean whiteToMove){
-        return MoveFinder.searchToDepth(Board.brett, whiteToMove, startHash, 1);
+        return MoveFinder.searchToDepth(null, whiteToMove, startHash, 1);
     }
 }

@@ -45,10 +45,10 @@ public class UCIWrapper {
 
                 if (command.contains("startpos")) {
                     // Start position
-                    Board.setupBoard(Board.brett);
+                    Board.setupStartPosition();
                     baseWhiteToMove = true;
                     // Do not clear TT here; use ucinewgame for a hard reset
-                    startHash = Zobrist.computeHash(Board.brett, true);
+                    startHash = Zobrist.computeHash(Board.bitboards, true);
                 }
 
                 // load FEN if given
@@ -76,14 +76,14 @@ public class UCIWrapper {
                             best = panicBest(true);
                         } else {
                             long thinkMs = TimeManager.computeThinkTimeMs(wtimeMs, wincMs);
-                            best = MoveFinder.iterativeDeepening(Board.brett, true, startHash, thinkMs);
+                            best = MoveFinder.iterativeDeepening(null, true, startHash, thinkMs);
                         }
                     } else {
                         if (btimeMs >= 0 && btimeMs <= 4000 && bincMs <= 500) {
                             best = panicBest(false);
                         } else {
                             long thinkMs = TimeManager.computeThinkTimeMs(btimeMs, bincMs);
-                            best = MoveFinder.iterativeDeepening(Board.brett, false, startHash, thinkMs);
+                            best = MoveFinder.iterativeDeepening(null, false, startHash, thinkMs);
                         }
                     }
                 }
@@ -110,7 +110,7 @@ public class UCIWrapper {
         if (fen.contains("moves")) {
             fen = fen.substring(0, fen.indexOf("moves")).trim();
         }
-        Board.brett = Board.fenToBoard(fen);
+        Board.loadFEN(fen);
         // detect side to move from FEN
         String[] parts = fen.split(" ");
         if (parts.length > 1) {
@@ -118,7 +118,7 @@ public class UCIWrapper {
         } else {
             baseWhiteToMove = true;
         }
-        startHash = Zobrist.computeHash(Board.brett, baseWhiteToMove);
+        startHash = Zobrist.computeHash(Board.bitboards, baseWhiteToMove);
     }
     private static void syncGameStateBoard(String command){
         moves = command.substring(command.indexOf("moves") + 6).trim();
@@ -128,8 +128,8 @@ public class UCIWrapper {
         // apply the moves from the described root
         for (int i = 0; i < moveList.length; i++) {
             Zug zug = new Zug(moveList[i]);
-            MoveInfo info = MoveFinder.saveMoveInfo(zug, Board.brett);
-            startHash = MoveFinder.doMoveUpdateHash(zug, Board.brett, info, startHash);
+            MoveInfo info = MoveFinder.saveMoveInfo(zug, null);
+            startHash = MoveFinder.doMoveUpdateHash(zug, null, info, startHash);
         }
     }
     private static void parseUciTimeParameters(String command){
@@ -155,6 +155,6 @@ public class UCIWrapper {
         }
     }
     private static Zug panicBest(boolean whiteToMove){
-        return MoveFinder.searchToDepth(Board.brett, whiteToMove, startHash, 2);
+        return MoveFinder.searchToDepth(null, whiteToMove, startHash, 2);
     }
 }

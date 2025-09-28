@@ -21,10 +21,10 @@ public class DeltaPruningBench {
         String fen = args[0];
 
         // Setup position
-        Board.brett = Board.fenToBoard(fen);
+        Board.loadFEN(fen);
         boolean whiteToMove = Board.whiteToMove; // Board.fenToBoard sets this
         Zobrist.initZobrist();
-        long hash = Zobrist.computeHash(Board.brett, whiteToMove);
+        long hash = Zobrist.computeHash(Board.bitboards, whiteToMove);
 
         // Reset counters
         setLongStatic(MoveFinder.class, "nodeCount", 0L);
@@ -34,7 +34,7 @@ public class DeltaPruningBench {
         // Run a fixed-depth search (depth 5)
         int depth = 5;
         long start = System.currentTimeMillis();
-        int score = MoveFinder.negamax(Board.brett, depth, Integer.MIN_VALUE / 2 + 1, Integer.MAX_VALUE / 2 - 1, whiteToMove, hash);
+        int score = MoveFinder.negamax(null, depth, Integer.MIN_VALUE / 2 + 1, Integer.MAX_VALUE / 2 - 1, whiteToMove, hash);
         long end = System.currentTimeMillis();
 
         long nodes = getLongStatic(MoveFinder.class, "nodeCount");

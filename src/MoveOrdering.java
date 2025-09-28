@@ -9,31 +9,33 @@ public class MoveOrdering {
     }
     private static int evaluateMove(Zug zug, Piece[][] board, boolean isWhite) {
         int score = 0;
-        Piece movingPiece = board[zug.startY][zug.startX];
-        Piece targetPiece;
-        int richtung = board[zug.startY][zug.startX].isWhite() ? -1 : 1;
-        if(Spiel.enPassant(zug, board)) {
-            targetPiece = board[zug.endY - richtung][zug.endX];
-        } else {
-            targetPiece = board[zug.endY][zug.endX];
+        // Piece values based on bitboards
+        int from = zug.startY * 8 + zug.startX;
+        boolean moverWhite = (Board.bitboards.occW & (1L << from)) != 0L;
+        int attackerType = Board.bitboards.pieceTypeAt(from, moverWhite);
+
+        boolean isCapture = Board.bitboards.isCapture(zug);
+        if (isCapture) {
+            int to = zug.endY * 8 + zug.endX;
+            int victimType;
+            if (((Board.bitboards.occ >>> to) & 1L) != 0L) {
+                boolean victimWhite = (Board.bitboards.occW & (1L << to)) != 0L;
+                victimType = Board.bitboards.pieceTypeAt(to, victimWhite);
+            } else {
+                victimType = 0; // en passant captures a pawn
+            }
+            int victimValue = pieceValues[victimType];
+            int attackerValue = pieceValues[attackerType];
+            score += 1000 + victimValue - attackerValue;
         }
 
-        // schlagen bonus krasser wenn arsch angreifer geiler verteidiger
-        if (!(targetPiece instanceof Empty)) {
-            int victimValue = pieceValues[targetPiece.getType()];
-            int attackerValue = pieceValues[movingPiece.getType()];
-            score += 1000 + victimValue - attackerValue; // Schlagzüge priorisieren
-        }
-
-        // promotion krass
-        if (movingPiece instanceof Bauer && Spiel.promotion(zug, board)) {
+        if (attackerType == 0 && Board.bitboards.willPromote(zug)) {
             score += 800;
         }
 
-        // rochade bewerten, wenn king safety von eval erkannt
-        if (Spiel.rochade(zug, board)) {
+        // simple castle bonus by king 2-square move
+        if (attackerType == 5 && Math.abs(zug.endX - zug.startX) == 2) {
             score += 50;
-
         }
         return score;
     }

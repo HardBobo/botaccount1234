@@ -2,7 +2,7 @@ import java.util.*;
 public class Spiel {
 
     public Spiel() {
-        Board.setupBoard(Board.brett);
+        Board.setupStartPosition();
     }
     public static boolean isPseudoLegal(Zug zug, boolean white, Piece[][] board){
         //eigene figur schlagen
@@ -11,65 +11,18 @@ public class Spiel {
         return zielFigur instanceof Empty || zielFigur.isWhite() != white;
     }
     public static Koordinaten kingCoordinates(boolean white){
-        // Use PieceTracker for efficient king lookup instead of scanning the entire board
-        return Board.pieceTracker.getKing(white);
+        long k = white ? Board.bitboards.w[5] : Board.bitboards.b[5];
+        if (k == 0L) return null;
+        int sq = Long.numberOfTrailingZeros(k);
+        return new Koordinaten(Bitboards.xOf(sq), Bitboards.yOf(sq));
     }
     public static boolean imBrett(int x, int y) {
         return x >= 0 && x < 8 && y >= 0 && y < 8;
     }
     public static boolean isSquareAttacked(Piece[][] board, int x, int y, boolean enemyIsWhite) {
-        for (int row = 0; row < 8; row++) {
-            for (int col = 0; col < 8; col++) {
-                Piece piece = board[row][col];
-
-                // richtige farbe + keine leeren felder
-                if (piece instanceof Empty || piece.isWhite() != enemyIsWhite) {
-                    continue;
-                }
-
-                // kann figur nach x y ziehen
-                final boolean diagonal = Math.abs(col - x) == Math.abs(row - y);
-                switch (piece) {
-                    case Bauer bauer -> {
-                        int dir = enemyIsWhite ? -1 : 1;
-                        if (row + dir == y && (col + 1 == x || col - 1 == x)) {
-                            return true;
-                        }
-                    }
-                    case Springer springer -> {
-                        int dx = Math.abs(col - x);
-                        int dy = Math.abs(row - y);
-                        if (dx * dy == 2) {
-                            return true;
-                        }
-                    }
-                    case Laeufer laeufer -> {
-                        if (diagonal && pathClear(board, col, row, x, y)) {
-                            return true;
-                        }
-                    }
-                    case Turm turm -> {
-                        if ((col == x || row == y) && pathClear(board, col, row, x, y)) {
-                            return true;
-                        }
-                    }
-                    case Dame dame -> {
-                        if ((diagonal ||
-                                (col == x || row == y)) &&
-                                pathClear(board, col, row, x, y)) {
-                            return true;
-                        }
-                    }
-                    case Koenig koenig -> {
-                        if (Math.abs(col - x) <= 1 && Math.abs(row - y) <= 1) {
-                            return true;
-                        }
-                    }
-                    default -> { /* Empty wird schon oben gefiltert */ }
-                }
-            }
-        }
-        return false;
+        // Bitboard-based: ignore board[][] here and use current bitboard state
+        int sq = y * 8 + x;
+        return Board.bitboards.isSquareAttackedBy(enemyIsWhite, sq);
     }
     private static boolean pathClear(Piece[][] board, int startX, int startY, int endX, int endY) {
         int dx = Integer.compare(endX, startX);
@@ -88,10 +41,10 @@ public class Spiel {
         return true;
     }
     public static void newGame(){
-        Board.setupBoard(Board.brett);
+        Board.setupStartPosition();
         MoveFinder.transpositionTable.clear();
         Zobrist.initZobrist();
-        LichessBotStream.startHash = Zobrist.computeHash(Board.brett, true);
+        LichessBotStream.startHash = Zobrist.computeHash(Board.bitboards, true);
     }
     
     // Game logic helper methods moved from MoveFinder
@@ -199,8 +152,8 @@ public class Spiel {
     }
     
     public static boolean inCheck(Piece[][] board, boolean isWhite) {
-        Koordinaten coords = kingCoordinates(isWhite);
-        return isSquareAttacked(board, coords.x, coords.y, !isWhite);
+        // Bitboard-based check detection
+        return Board.bitboards.inCheck(isWhite);
     }
     
     public static boolean[] getCastleRights(Piece[][] board) {
@@ -249,22 +202,20 @@ public class Spiel {
     }
 
     public static void resetPawnEnPassant(Piece[][] board){
-        // Use PieceTracker to iterate only over pawns of both colors
-        // and clear their en passant flags if set.
-        PieceTracker tracker = Board.pieceTracker;
-        // White pawns
-        for (Koordinaten pos : tracker.getPawns(true)) {
-            Piece p = board[pos.y][pos.x];
-            if (p instanceof Bauer b && b.isEnPassantPossible()) {
-                b.setEnPassantPossible(false);
-            }
+        // Use bitboards to iterate pawns and clear EP flags on mirror board only
+        long wp = Board.bitboards.w[0];
+        while (wp != 0) {
+            int sq = Long.numberOfTrailingZeros(wp); wp &= wp - 1;
+            int x = Bitboards.xOf(sq), y = Bitboards.yOf(sq);
+            Piece p = board[y][x];
+            if (p instanceof Bauer b && b.isEnPassantPossible()) b.setEnPassantPossible(false);
         }
-        // Black pawns
-        for (Koordinaten pos : tracker.getPawns(false)) {
-            Piece p = board[pos.y][pos.x];
-            if (p instanceof Bauer b && b.isEnPassantPossible()) {
-                b.setEnPassantPossible(false);
-            }
+        long bp = Board.bitboards.b[0];
+        while (bp != 0) {
+            int sq = Long.numberOfTrailingZeros(bp); bp &= bp - 1;
+            int x = Bitboards.xOf(sq), y = Bitboards.yOf(sq);
+            Piece p = board[y][x];
+            if (p instanceof Bauer b && b.isEnPassantPossible()) b.setEnPassantPossible(false);
         }
     }
     public static void resetMovingPiece(Zug zug, Piece [][] board, MoveInfo info){
