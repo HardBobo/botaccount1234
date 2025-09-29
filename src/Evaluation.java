@@ -163,6 +163,16 @@ public class Evaluation {
     }
 
     public static int evaluation(boolean isWhite) {
+        // Prefer NNUE if available
+        if (Nnue.isUsable()) {
+            try {
+                return Nnue.evaluate(isWhite);
+            } catch (Throwable t) {
+                // If NNUE fails for any reason, fall back to classic PST eval
+                System.err.println("NNUE evaluation failed, falling back to PST: " + t.getMessage());
+            }
+        }
+
         int[] mg = new int[2]; // middlegame scores for white and black
         int[] eg = new int[2]; // endgame scores for white and black
         int gamePhase = 0;

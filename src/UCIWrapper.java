@@ -20,6 +20,13 @@ public class UCIWrapper {
         Spiel.newGame();
         resetVariables();
 
+        // Attempt to auto-load NNUE if enabled via config/env
+        try {
+            Nnue.tryAutoLoad();
+        } catch (Throwable t) {
+            System.err.println("NNUE autoload failed: " + t.getMessage());
+        }
+
         Scanner in = new Scanner(System.in);
 
         while (in.hasNextLine()) {
