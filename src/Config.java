@@ -39,6 +39,9 @@ public class Config {
         Properties defaultProps = new Properties();
         defaultProps.setProperty("lichess.api.token", "YOUR_LICHESS_BOT_TOKEN_HERE");
         defaultProps.setProperty("opening.database.path", "openingdatabank/gm_games5moves.txt");
+        // NNUE defaults
+        defaultProps.setProperty("nnue.enabled", "false");
+        defaultProps.setProperty("nnue.path", "nnue/quantised.bin");
         
         try (FileOutputStream fos = new FileOutputStream(CONFIG_FILE)) {
             defaultProps.store(fos, "Bot Configuration - Replace YOUR_LICHESS_BOT_TOKEN_HERE with your actual token");
@@ -83,6 +86,27 @@ public class Config {
             file = new File(System.getProperty("user.dir"), path);
         }
         
+        return file.getAbsolutePath();
+    }
+
+    // --- NNUE configuration helpers ---
+    public boolean isNnueEnabled() {
+        String env = System.getenv("NNUE_ENABLED");
+        if (env != null) {
+            return env.equalsIgnoreCase("1") || env.equalsIgnoreCase("true") || env.equalsIgnoreCase("yes");
+        }
+        String p = properties.getProperty("nnue.enabled", "false");
+        return p.equalsIgnoreCase("1") || p.equalsIgnoreCase("true") || p.equalsIgnoreCase("yes");
+    }
+
+    public String getNnuePath() {
+        String env = System.getenv("NNUE_PATH");
+        String path = (env != null && !env.isEmpty()) ? env : properties.getProperty("nnue.path", "");
+        if (path == null || path.isEmpty()) return null;
+        File file = new File(path);
+        if (!file.isAbsolute()) {
+            file = new File(System.getProperty("user.dir"), path);
+        }
         return file.getAbsolutePath();
     }
     
