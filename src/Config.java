@@ -109,6 +109,23 @@ public class Config {
         }
         return file.getAbsolutePath();
     }
+
+    // Optional NNUE sign-flip for debugging integration mismatches.
+    public boolean getNnueFlipSign() {
+        String env = System.getenv("NNUE_FLIP_SIGN");
+        if (env != null) {
+            return env.equalsIgnoreCase("1") || env.equalsIgnoreCase("true") || env.equalsIgnoreCase("yes");
+        }
+        String p = properties.getProperty("nnue.flip.sign", "false");
+        return p.equalsIgnoreCase("1") || p.equalsIgnoreCase("true") || p.equalsIgnoreCase("yes");
+    }
+
+    // Optional NNUE mapping mode: direct (default) or premirror (legacy attempt).
+    public String getNnueMapping() {
+        String env = System.getenv("NNUE_MAPPING");
+        String m = (env != null && !env.isEmpty()) ? env : properties.getProperty("nnue.mapping", "direct");
+        return m.toLowerCase();
+    }
     
     public void validateConfiguration() {
         try {
