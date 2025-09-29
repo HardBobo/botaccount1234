@@ -18,6 +18,8 @@ public final class Nnue {
     private static volatile boolean usable = false;     // true when network parsed OK
     private static volatile String loadedPath = null;
     private static volatile NnueNetwork NET = null;
+    private static volatile boolean FLIP_SIGN = false;
+    private static volatile String MAPPING = "direct"; // direct | premirror
 
     private Nnue() {}
 
@@ -34,6 +36,9 @@ public final class Nnue {
         Config cfg = Config.getInstance();
         if (!cfg.isNnueEnabled()) return;
         if (usable) return;
+        // Read debug knobs as well
+        FLIP_SIGN = cfg.getNnueFlipSign();
+        MAPPING = cfg.getNnueMapping();
         String path = cfg.getNnuePath();
         if (path == null) {
             System.err.println("NNUE enabled but no path configured (nnue.path or NNUE_PATH)");
@@ -64,8 +69,12 @@ public final class Nnue {
             NnueNetwork net = NnueNetwork.loadRaw(ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN));
             NET = net;
             loadedPath = f.getAbsolutePath();
+            // Refresh debug knobs from config at load time
+            Config cfg = Config.getInstance();
+            FLIP_SIGN = cfg.getNnueFlipSign();
+            MAPPING = cfg.getNnueMapping();
             usable = true;
-            System.out.println("NNUE loaded: H=" + net.H + " from " + loadedPath);
+            System.out.println("NNUE loaded: H=" + net.H + " from " + loadedPath + " (mapping=" + MAPPING + ", flipSign=" + FLIP_SIGN + ")");
             return true;
         } catch (Exception e) {
             System.err.println("Error loading NNUE file: " + e.getMessage());
@@ -79,7 +88,8 @@ public final class Nnue {
             throw new IllegalStateException("NNUE evaluate called but NNUE is not usable");
         }
         BoardApi boardApi = new BoardAdapter(isWhite);
-        return NET.evaluate(boardApi);
+        int cp = NET.evaluate(boardApi, MAPPING);
+        return FLIP_SIGN ? -cp : cp;
     }
 
     /** Adapter from engine bitboards to NNUE BoardApi. */
@@ -162,7 +172,7 @@ public final class Nnue {
             return new NnueNetwork(H, l0w, l0b, l1w, l1b);
         }
 
-        int evaluate(BoardApi board) {
+        int evaluate(BoardApi board, String mappingMode) {
             // Accumulators start from bias
             short[] us = new short[H];
             short[] them = new short[H];
@@ -174,25 +184,34 @@ public final class Nnue {
                 int pt = piece.typeIndex; // 0..5
                 boolean pieceWhite = piece.isWhite;
 
-                // Follow bullet's Chess768 mapping directly (no pre-mirroring):
-                // stmIndex = [0,384][c] + 64*pt + sq;
-                // ntmIndex = [384,0][c] + 64*pt + (sq ^ 56);
-                // where c=0 for the side-to-move colour, c=1 for the other colour.
-                int stmBase = stmWhite
-                        ? (pieceWhite ? 0 : 384)
-                        : (pieceWhite ? 384 : 0);
-                int ntmBase = stmWhite
-                        ? (pieceWhite ? 384 : 0)
-                        : (pieceWhite ? 0 : 384);
-
-                int stmIndex = stmBase + 64 * pt + sq;
-                int ntmIndex = ntmBase + 64 * pt + (sq ^ 56);
-
-                int baseStm = H * stmIndex;
-                int baseNtm = H * ntmIndex;
-                for (int r = 0; r < H; r++) {
-                    us[r]   = (short)(us[r]   + l0w[baseStm + r]);
-                    them[r] = (short)(them[r] + l0w[baseNtm + r]);
+                if ("premirror".equals(mappingMode)) {
+                    // Legacy attempt: pre-mirror for stm black, ntm uses original sq
+                    int sqRel = stmWhite ? sq : (sq ^ 56);
+                    int cRel = (pieceWhite == stmWhite) ? 0 : 1; // 0=us,1=them
+                    int stmIndex = (cRel == 1 ? 384 : 0) + 64 * pt + sqRel;
+                    int ntmIndex = (cRel == 1 ? 0   : 384) + 64 * pt + (sqRel ^ 56);
+                    int baseStm = H * stmIndex;
+                    int baseNtm = H * ntmIndex;
+                    for (int r = 0; r < H; r++) {
+                        us[r]   = (short)(us[r]   + l0w[baseStm + r]);
+                        them[r] = (short)(them[r] + l0w[baseNtm + r]);
+                    }
+                } else {
+                    // Default: direct mapping as in bullet Chess768
+                    int stmBase = stmWhite
+                            ? (pieceWhite ? 0 : 384)
+                            : (pieceWhite ? 384 : 0);
+                    int ntmBase = stmWhite
+                            ? (pieceWhite ? 384 : 0)
+                            : (pieceWhite ? 0 : 384);
+                    int stmIndex = stmBase + 64 * pt + sq;
+                    int ntmIndex = ntmBase + 64 * pt + (sq ^ 56);
+                    int baseStm = H * stmIndex;
+                    int baseNtm = H * ntmIndex;
+                    for (int r = 0; r < H; r++) {
+                        us[r]   = (short)(us[r]   + l0w[baseStm + r]);
+                        them[r] = (short)(them[r] + l0w[baseNtm + r]);
+                    }
                 }
             });
 
