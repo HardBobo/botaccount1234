@@ -173,11 +173,20 @@ public final class Nnue {
             board.forEachPiece((piece, sq) -> {
                 int pt = piece.typeIndex; // 0..5
                 boolean pieceWhite = piece.isWhite;
-                int sqRel = stmWhite ? sq : (sq ^ 56); // mirror ranks if stm is Black
-                int cRel = (pieceWhite == stmWhite) ? 0 : 1; // 0=us, 1=them
 
-                int stmIndex = (cRel == 1 ? 384 : 0) + 64 * pt + sqRel;
-                int ntmIndex = (cRel == 1 ? 0   : 384) + 64 * pt + (sqRel ^ 56);
+                // Follow bullet's Chess768 mapping directly (no pre-mirroring):
+                // stmIndex = [0,384][c] + 64*pt + sq;
+                // ntmIndex = [384,0][c] + 64*pt + (sq ^ 56);
+                // where c=0 for the side-to-move colour, c=1 for the other colour.
+                int stmBase = stmWhite
+                        ? (pieceWhite ? 0 : 384)
+                        : (pieceWhite ? 384 : 0);
+                int ntmBase = stmWhite
+                        ? (pieceWhite ? 384 : 0)
+                        : (pieceWhite ? 0 : 384);
+
+                int stmIndex = stmBase + 64 * pt + sq;
+                int ntmIndex = ntmBase + 64 * pt + (sq ^ 56);
 
                 int baseStm = H * stmIndex;
                 int baseNtm = H * ntmIndex;
