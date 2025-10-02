@@ -197,15 +197,15 @@ public final class Nnue {
                         them[r] = (short)(them[r] + l0w[baseNtm + r]);
                     }
                 } else {
-                    // Default: direct mapping as in bullet Chess768
-                    int stmBase = stmWhite
-                            ? (pieceWhite ? 0 : 384)
-                            : (pieceWhite ? 384 : 0);
-                    int ntmBase = stmWhite
-                            ? (pieceWhite ? 384 : 0)
-                            : (pieceWhite ? 0 : 384);
-                    int stmIndex = stmBase + 64 * pt + sq;
-                    int ntmIndex = ntmBase + 64 * pt + (sq ^ 56);
+                    // Fixed: exact bullet Chess768 mapping
+                    // piece encoding: bit 3 = color (0=white, 1=black), bits 0-2 = type
+                    int bulletPiece = (pieceWhite ? 0 : 8) + pt; // recreate bullet piece format
+                    int c = (bulletPiece & 8) > 0 ? 1 : 0; // color: 0=white, 1=black  
+                    int pc = 64 * (bulletPiece & 7); // type offset
+                    
+                    int stmIndex = (c == 0 ? 0 : 384) + pc + sq;      // [0,384][c] + pc + sq
+                    int ntmIndex = (c == 0 ? 384 : 0) + pc + (sq ^ 56); // [384,0][c] + pc + (sq^56)
+                    
                     int baseStm = H * stmIndex;
                     int baseNtm = H * ntmIndex;
                     for (int r = 0; r < H; r++) {
