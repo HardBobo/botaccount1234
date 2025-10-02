@@ -138,12 +138,12 @@ public final class Nnue {
         private static final int SCALE = 400;
 
         final int H;                // hidden size
-        final short[] l0w;          // H * 768 (column-major)
-        final short[] l0b;          // H
-        final short[] l1w;          // 2 * H
-        final short  l1b;           // 1
+        final short[][] l0w;        // [768][H] feature weights (feature-major)
+        final short[] l0b;          // H bias
+        final short[] l1w;          // 2 * H output weights
+        final short  l1b;           // 1 output bias
 
-        private NnueNetwork(int H, short[] l0w, short[] l0b, short[] l1w, short l1b) {
+        private NnueNetwork(int H, short[][] l0w, short[] l0b, short[] l1w, short l1b) {
             this.H = H; this.l0w = l0w; this.l0b = l0b; this.l1w = l1w; this.l1b = l1b;
         }
 
@@ -162,8 +162,13 @@ public final class Nnue {
 
         private static NnueNetwork loadRawWithH(ByteBuffer bb, int H) {
             bb.rewind();
-            short[] l0w = new short[H * 768];
-            for (int i = 0; i < l0w.length; i++) l0w[i] = bb.getShort();
+            // Load weights in column-major order (feature-major) as bullet stores them
+            short[][] l0w = new short[768][H]; // [feature][hidden]
+            for (int feat = 0; feat < 768; feat++) {
+                for (int h = 0; h < H; h++) {
+                    l0w[feat][h] = bb.getShort();
+                }
+            }
             short[] l0b = new short[H];
             for (int i = 0; i < H; i++) l0b[i] = bb.getShort();
             short[] l1w = new short[2 * H];
@@ -173,58 +178,68 @@ public final class Nnue {
         }
 
         int evaluate(BoardApi board, String mappingMode) {
-            // Initialize accumulators with bias (exact copy from bullet_eval)
+            // Initialize accumulators with bias - exact match to bullet_eval
             short[] stmAcc = new short[H];
             short[] ntmAcc = new short[H];
             System.arraycopy(l0b, 0, stmAcc, 0, H);
             System.arraycopy(l0b, 0, ntmAcc, 0, H);
 
-            // Use exact bullet Chess768 feature mapping (ignore mappingMode)
+            boolean whiteToMove = board.sideToMoveIsWhite();
+            
+            // Extract features exactly as bullet Chess768 does
             board.forEachPiece((piece, sq) -> {
-                // Recreate bullet piece encoding: bit 3 = color, bits 0-2 = type 
+                // Recreate bullet's piece encoding: color in bit 3, type in bits 0-2
                 int bulletPiece = (piece.isWhite ? 0 : 8) + piece.typeIndex;
                 
-                // Extract color and piece type offset exactly as bullet does
-                int c = (bulletPiece & 8) > 0 ? 1 : 0; // 0=white, 1=black
+                // Color relative to side-to-move: cRel = 0 for STM pieces, 1 for opponent pieces
+                boolean pieceIsStm = (whiteToMove && piece.isWhite) || (!whiteToMove && !piece.isWhite);
+                int cRel = pieceIsStm ? 0 : 1;
                 int pc = 64 * (bulletPiece & 7);       // piece type offset
                 
-                // Calculate STM and NTM indices exactly as bullet Chess768
-                int stmIdx = (c == 0 ? 0 : 384) + pc + sq;      // [0,384][c] + pc + sq
-                int ntmIdx = (c == 0 ? 384 : 0) + pc + (sq ^ 56); // [384,0][c] + pc + (sq^56)
+                // Our Board uses a8=0 indexing; bullet's Chess768 expects a1=0.
+                // First convert to a1-based index (white's perspective), then re-orient so that
+                // the side-to-move is treated as 'white' on rank 1.
+                int sqA1 = sq ^ 56;
+                int sqStm = whiteToMove ? sqA1 : (sqA1 ^ 56);
                 
-                // Add features to accumulators (column-major: H * feature + row)
+                // Calculate feature indices exactly as bullet Chess768 but using cRel and sqStm
+                // stm = [0, 384][cRel] + pc + sqStm;
+                // ntm = [384, 0][cRel] + pc + (sqStm ^ 56);
+                int stmIdx = (cRel == 0 ? 0 : 384) + pc + sqStm;
+                int ntmIdx = (cRel == 0 ? 384 : 0) + pc + (sqStm ^ 56);
+                
+                // Add feature weights to accumulators (feature-major layout)
                 for (int h = 0; h < H; h++) {
-                    stmAcc[h] += l0w[H * stmIdx + h];
-                    ntmAcc[h] += l0w[H * ntmIdx + h];
+                    stmAcc[h] += l0w[stmIdx][h];
+                    ntmAcc[h] += l0w[ntmIdx][h];
                 }
             });
 
-            // Compute final evaluation exactly as bullet_eval
+            // Compute final output exactly as bullet_eval Network::evaluate
             long output = 0;
             
-            // STM accumulator part
+            // Side-to-move accumulator contribution
             for (int h = 0; h < H; h++) {
                 output += (long)screlu(stmAcc[h]) * (long)l1w[h];
             }
             
-            // NTM accumulator part  
+            // Non-side-to-move accumulator contribution
             for (int h = 0; h < H; h++) {
                 output += (long)screlu(ntmAcc[h]) * (long)l1w[H + h];
             }
-            
             // Reduce quantization from QA*QA*QB to QA*QB
             output /= QA;
             
-            // Add bias
+            // Add output bias
             output += l1b;
             
-            // Apply eval scale and remove quantization
-            output *= SCALE;
-            output /= (long)QA * (long)QB;
+            // Apply eval scale and final dequantization
+            // output * SCALE / (QA * QB) matches bullet_eval exactly
+            output = output * SCALE / ((long)QA * (long)QB);
             
             // Clamp to int range
-            if (output > Integer.MAX_VALUE) output = Integer.MAX_VALUE;
-            if (output < Integer.MIN_VALUE) output = Integer.MIN_VALUE;
+            if (output > Integer.MAX_VALUE) return Integer.MAX_VALUE;
+            if (output < Integer.MIN_VALUE) return Integer.MIN_VALUE;
             
             return (int)output;
         }

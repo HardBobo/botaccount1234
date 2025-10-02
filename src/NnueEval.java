@@ -67,7 +67,7 @@ public final class NnueEval {
         // Load FEN into engine bitboards
         Board.loadFEN(fenArg.trim());
 
-        // Evaluate from side-to-move perspective
+        // Evaluate from side-to-move perspective (the evaluator is STM-aware)
         int evalCp = Nnue.evaluate(Board.whiteToMove);
         System.out.println("FEN: " + fenArg);
         System.out.println("Side to move: " + (Board.whiteToMove ? "w" : "b"));
