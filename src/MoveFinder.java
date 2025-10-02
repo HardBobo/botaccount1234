@@ -609,20 +609,20 @@ public class MoveFinder {
 
         Zug bestSoFar = order.getFirst();
 
-        for(int i = 0; i < depth; i++){
+        for(int i = 1; i <= depth; i++){
 
             SearchResult result;
 
             if (depth == 1 || !hasPreviousScore) {
                 // First depth or no previous score - use full window
-                result = findBestMovesWithAspirationWindow(depth, isWhite, order, hash, Integer.MIN_VALUE + 1, Integer.MAX_VALUE - 1);
+                result = findBestMovesWithAspirationWindow(i, isWhite, order, hash, Integer.MIN_VALUE + 1, Integer.MAX_VALUE - 1);
             } else {
                 // Use aspiration window based on previous score
                 final int ASPIRATION_WINDOW = 50;
                 int alpha = prevScore - ASPIRATION_WINDOW;
                 int beta = prevScore + ASPIRATION_WINDOW;
 
-                result = searchWithAspirationWindowRetries(depth, isWhite, order, hash, alpha, beta, prevScore);
+                result = searchWithAspirationWindowRetries(i, isWhite, order, hash, alpha, beta, prevScore);
             }
 
             // Adopt improvements found so far at this depth
