@@ -397,32 +397,6 @@ public class MoveFinder {
         Zug bestMove = null;
 
         for(Zug zug : forcingMoves)  {
-            // Delta pruning (move-level): conservative application only at non-PV nodes,
-            // skipping promotions and en passant to avoid tactical misses.
-            boolean nonPVq = (beta - alpha == 1);
-            if (nonPVq && !nearMateBounds && !inCheckNow) {
-                // Skip delta pruning for promotions and en passant
-                boolean isPromotion = (zug.promoteTo == 'q');
-                int fromSq = zug.startY * 8 + zug.startX;
-                int toSq = zug.endY * 8 + zug.endX;
-                boolean moverWhite = (Board.bitboards.occW & (1L << fromSq)) != 0L;
-                int moverType = Board.bitboards.pieceTypeAt(fromSq, moverWhite);
-                boolean isEP = (moverType == 0) && (Board.bitboards.epSquare == toSq) && (zug.endX != zug.startX) && (((Board.bitboards.occ >>> toSq) & 1L) == 0L);
-                if (!isPromotion && !isEP) {
-                    int capValue;
-                    if (((Board.bitboards.occ >>> toSq) & 1L) != 0L) {
-                        boolean victimWhite = (Board.bitboards.occW & (1L << toSq)) != 0L;
-                        int victimType = Board.bitboards.pieceTypeAt(toSq, victimWhite);
-                        capValue = DELTA_PIECE_VALUES[victimType];
-                    } else {
-                        // Should only happen for en passant, but we excluded EP above, so treat as pawn
-                        capValue = DELTA_PIECE_VALUES[0];
-                    }
-                    if (best_value + capValue + DELTA_MARGIN <= alpha) {
-                        continue; // prune futile capture
-                    }
-                }
-            }
         
             MoveInfo info = saveMoveInfo(zug);
         
