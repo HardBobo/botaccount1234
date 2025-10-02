@@ -18,8 +18,6 @@ public final class Nnue {
     private static volatile boolean usable = false;     // true when network parsed OK
     private static volatile String loadedPath = null;
     private static volatile NnueNetwork NET = null;
-    private static volatile boolean FLIP_SIGN = false;
-    private static volatile String MAPPING = "direct"; // direct | premirror
 
     private Nnue() {}
 
@@ -33,8 +31,6 @@ public final class Nnue {
         if (!cfg.isNnueEnabled()) return;
         if (usable) return;
         // Read debug knobs as well
-        FLIP_SIGN = cfg.getNnueFlipSign();
-        MAPPING = cfg.getNnueMapping();
         String path = cfg.getNnuePath();
         if (path == null) {
             System.err.println("NNUE enabled but no path configured (nnue.path or NNUE_PATH)");
@@ -65,12 +61,8 @@ public final class Nnue {
             NnueNetwork net = NnueNetwork.loadRaw(ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN));
             NET = net;
             loadedPath = f.getAbsolutePath();
-            // Refresh debug knobs from config at load time
-            Config cfg = Config.getInstance();
-            FLIP_SIGN = cfg.getNnueFlipSign();
-            MAPPING = cfg.getNnueMapping();
             usable = true;
-            System.out.println("NNUE loaded: H=" + net.H + " from " + loadedPath + " (mapping=" + MAPPING + ", flipSign=" + FLIP_SIGN + ")");
+            System.out.println("NNUE loaded: H=" + net.H + " from " + loadedPath);
             return true;
         } catch (Exception e) {
             System.err.println("Error loading NNUE file: " + e.getMessage());
@@ -84,8 +76,7 @@ public final class Nnue {
             throw new IllegalStateException("NNUE evaluate called but NNUE is not usable");
         }
         BoardApi boardApi = new BoardAdapter(isWhite);
-        int cp = NET.evaluate(boardApi);
-        return FLIP_SIGN ? -cp : cp;
+        return NET.evaluate(boardApi);
     }
 
     /** Rebuild incremental accumulators from the current Board state. */

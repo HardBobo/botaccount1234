@@ -151,6 +151,12 @@ if("gameStart".equals(type)) { //wenn spielstart in gamestream übergehen
 else if ("gameFull".equals(type)) { // erster state nach gamestart
                                     // Zeitkontrolle aus gameFull lesen, falls vorhanden
                                     try {
+                                        Nnue.tryAutoLoad();
+                                    } catch (Throwable t) {
+                                        System.err.println("NNUE autoload failed: " + t.getMessage());
+                                    }
+
+                                    try {
                                         if (event.has("clock")) {
                                             JSONObject clock = event.getJSONObject("clock");
                                             // Lichess liefert hier i.d.R. Sekundenwerte (initial/increment)
