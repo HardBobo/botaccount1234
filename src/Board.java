@@ -5,6 +5,8 @@ public class Board {
     public static void setupStartPosition(){
         whiteToMove = true;
         bitboards.initStartPosition();
+        // Rebuild NNUE incremental accumulators if available
+        try { if (Nnue.isUsable()) Nnue.rebuildIncremental(); } catch (Throwable ignored) {}
     }
 
     public static void loadFEN(String fen) {
@@ -63,5 +65,8 @@ public class Board {
         }
 
         bitboards.updateOcc();
+
+        // Rebuild NNUE incremental accumulators if available
+        try { if (Nnue.isUsable()) Nnue.rebuildIncremental(); } catch (Throwable ignored) {}
     }
 }

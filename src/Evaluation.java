@@ -162,7 +162,12 @@ public class Evaluation {
         return 2 * pieceType + color;
     }
 
+    private static volatile boolean forcePstOnly = false;
+
+    public static void setForcePstOnly(boolean v) { forcePstOnly = v; }
+
     public static int evaluation(boolean isWhite) {
+        if (forcePstOnly) return evaluatePstOnly(isWhite);
         // Prefer NNUE if available
         if (Nnue.isUsable()) {
             try {
@@ -172,7 +177,14 @@ public class Evaluation {
                 System.err.println("NNUE evaluation failed, falling back to PST: " + t.getMessage());
             }
         }
+        return evaluatePstOnly(isWhite);
+    }
 
+    /**
+     * Classic PST/material evaluation only (no NNUE).
+     * Returns side-to-move perspective: positive = good for isWhite, negative = bad.
+     */
+    public static int evaluatePstOnly(boolean isWhite) {
         int[] mg = new int[2]; // middlegame scores for white and black
         int[] eg = new int[2]; // endgame scores for white and black
         int gamePhase = 0;

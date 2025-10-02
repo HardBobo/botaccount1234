@@ -22,6 +22,11 @@ public class MoveFinder {
 
     static Map<Long, TTEntry> transpositionTable = new HashMap<>();
 
+    // Node counter for benchmarking
+    private static long nodes;
+    public static void resetNodeCounter() { nodes = 0; }
+    public static long getNodeCounter() { return nodes; }
+
     public static ArrayList<Zug> possibleMoves(boolean white) {
         // Bitboard-based move generation
         return BitboardMoveGen.generate(white, Board.bitboards);
@@ -150,7 +155,7 @@ public class MoveFinder {
     }
 
     public static int negamax(int depth, int alpha, int beta, boolean isWhite, long hash, boolean canNull) {
-
+        nodes++;
         if (System.currentTimeMillis() >= searchEndTimeMs) {
             timeUp = true;
             depthAborted = true;
@@ -332,7 +337,7 @@ public class MoveFinder {
     }
 
     public static int qSearch(int alpha, int beta, boolean isWhite, long hash){
-        
+        nodes++;
         if (System.currentTimeMillis() >= searchEndTimeMs) {
             timeUp = true;
             depthAborted = true;

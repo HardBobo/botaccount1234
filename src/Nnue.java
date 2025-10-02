@@ -92,6 +92,25 @@ public final class Nnue {
         return FLIP_SIGN ? -cp : cp;
     }
 
+    /** Rebuild incremental accumulators from the current Board state. */
+    public static void rebuildIncremental() {
+        if (!usable || NET == null) return;
+        BoardApi boardApi = new BoardAdapter(Board.whiteToMove);
+        NET.rebuildIncrementalFromBoard(boardApi);
+    }
+
+    /** Apply NNUE incremental delta for an executed move (call after bitboards apply). */
+    public static void onMoveApplied(Zug z, MoveInfo info) {
+        if (!usable || NET == null) return;
+        NET.onMoveApplied(z, info);
+    }
+
+    /** Undo NNUE incremental delta for a reverted move (call after bitboards undo). */
+    public static void onMoveUndone(Zug z, MoveInfo info) {
+        if (!usable || NET == null) return;
+        NET.onMoveUndone(z, info);
+    }
+
     /** Adapter from engine bitboards to NNUE BoardApi. */
     private static final class BoardAdapter implements BoardApi {
         private final boolean stmWhite;
@@ -137,6 +156,13 @@ public final class Nnue {
         private static final int QB = 64;
         private static final int SCALE = 400;
 
+        // Incremental accumulator state (absolute, STM-independent)
+        private static final class Inc {
+            short[] stmAcc; // absolute mapping 'stm' bucket
+            short[] ntmAcc; // absolute mapping 'ntm' bucket
+            Inc(int H) { this.stmAcc = new short[H]; this.ntmAcc = new short[H]; }
+        }
+
         final int H;                // hidden size
         final short[][] l0w;        // [768][H] feature weights (feature-major)
         final short[] l0b;          // H bias
@@ -146,6 +172,9 @@ public final class Nnue {
         private NnueNetwork(int H, short[][] l0w, short[] l0b, short[] l1w, short l1b) {
             this.H = H; this.l0w = l0w; this.l0b = l0b; this.l1w = l1w; this.l1b = l1b;
         }
+
+        // Current incremental accumulators (built from Board), or null if not initialized
+        private Inc inc;
 
         static NnueNetwork loadRaw(ByteBuffer bb) {
             int totalBytes = bb.remaining();
@@ -178,7 +207,15 @@ public final class Nnue {
         }
 
         int evaluate(BoardApi board, String mappingMode) {
-            // Initialize accumulators with bias - exact match to bullet_eval
+            // If incremental accumulators are available, use them (absolute, STM-independent)
+            if (inc != null) {
+                boolean whiteToMove = board.sideToMoveIsWhite();
+                short[] us = whiteToMove ? inc.stmAcc : inc.ntmAcc;
+                short[] them = whiteToMove ? inc.ntmAcc : inc.stmAcc;
+                return evaluateBuckets(us, them);
+            }
+
+            // Fallback: build STM-aware accumulators on the fly (slower)
             short[] stmAcc = new short[H];
             short[] ntmAcc = new short[H];
             System.arraycopy(l0b, 0, stmAcc, 0, H);
@@ -186,67 +223,148 @@ public final class Nnue {
 
             boolean whiteToMove = board.sideToMoveIsWhite();
             
-            // Extract features exactly as bullet Chess768 does
+            // Extract features exactly as bullet Chess768 does (STM-aware)
             board.forEachPiece((piece, sq) -> {
-                // Recreate bullet's piece encoding: color in bit 3, type in bits 0-2
                 int bulletPiece = (piece.isWhite ? 0 : 8) + piece.typeIndex;
-                
-                // Color relative to side-to-move: cRel = 0 for STM pieces, 1 for opponent pieces
                 boolean pieceIsStm = (whiteToMove && piece.isWhite) || (!whiteToMove && !piece.isWhite);
                 int cRel = pieceIsStm ? 0 : 1;
-                int pc = 64 * (bulletPiece & 7);       // piece type offset
-                
-                // Our Board uses a8=0 indexing; bullet's Chess768 expects a1=0.
-                // First convert to a1-based index (white's perspective), then re-orient so that
-                // the side-to-move is treated as 'white' on rank 1.
+                int pc = 64 * (bulletPiece & 7);
                 int sqA1 = sq ^ 56;
                 int sqStm = whiteToMove ? sqA1 : (sqA1 ^ 56);
-                
-                // Calculate feature indices exactly as bullet Chess768 but using cRel and sqStm
-                // stm = [0, 384][cRel] + pc + sqStm;
-                // ntm = [384, 0][cRel] + pc + (sqStm ^ 56);
                 int stmIdx = (cRel == 0 ? 0 : 384) + pc + sqStm;
                 int ntmIdx = (cRel == 0 ? 384 : 0) + pc + (sqStm ^ 56);
-                
-                // Add feature weights to accumulators (feature-major layout)
                 for (int h = 0; h < H; h++) {
                     stmAcc[h] += l0w[stmIdx][h];
                     ntmAcc[h] += l0w[ntmIdx][h];
                 }
             });
 
-            // Compute final output exactly as bullet_eval Network::evaluate
-            long output = 0;
-            
-            // Side-to-move accumulator contribution
-            for (int h = 0; h < H; h++) {
-                output += (long)screlu(stmAcc[h]) * (long)l1w[h];
-            }
-            
-            // Non-side-to-move accumulator contribution
-            for (int h = 0; h < H; h++) {
-                output += (long)screlu(ntmAcc[h]) * (long)l1w[H + h];
-            }
-            // Reduce quantization from QA*QA*QB to QA*QB
-            output /= QA;
-            
-            // Add output bias
-            output += l1b;
-            
-            // Apply eval scale and final dequantization
-            // output * SCALE / (QA * QB) matches bullet_eval exactly
-            output = output * SCALE / ((long)QA * (long)QB);
-            
-            // Clamp to int range
-            if (output > Integer.MAX_VALUE) return Integer.MAX_VALUE;
-            if (output < Integer.MIN_VALUE) return Integer.MIN_VALUE;
-            
-            return (int)output;
+            return evaluateBuckets(stmAcc, ntmAcc);
         }
 
+        private int evaluateBuckets(short[] usAcc, short[] themAcc) {
+            long output = 0;
+            for (int h = 0; h < H; h++) output += (long)screlu(usAcc[h]) * (long)l1w[h];
+            for (int h = 0; h < H; h++) output += (long)screlu(themAcc[h]) * (long)l1w[H + h];
+            output /= QA;
+            output += l1b;
+            output = output * SCALE / ((long)QA * (long)QB);
+            if (output > Integer.MAX_VALUE) return Integer.MAX_VALUE;
+            if (output < Integer.MIN_VALUE) return Integer.MIN_VALUE;
+            return (int)output;
+        }
         private static int screlu(short x) {
             int y = x;
             if (y < 0) y = 0; if (y > QA) y = QA; return y * y;
         }
+
+        // ---- Incremental API ----
+        void rebuildIncrementalFromBoard(BoardApi board) {
+            inc = new Inc(H);
+            // start from bias
+            System.arraycopy(l0b, 0, inc.stmAcc, 0, H);
+            System.arraycopy(l0b, 0, inc.ntmAcc, 0, H);
+            // Add all pieces with absolute mapping (STM-independent)
+            board.forEachPiece((piece, sq) -> addPieceAbs(piece.isWhite, piece.typeIndex, sq));
+        }
+
+        private void addPieceAbs(boolean isWhite, int pieceType, int sq) {
+            int c = isWhite ? 0 : 1;
+            int pc = 64 * pieceType;
+            int sqA1 = sq ^ 56;
+            int stmIdx = (c == 0 ? 0 : 384) + pc + sqA1;
+            int ntmIdx = (c == 0 ? 384 : 0) + pc + (sqA1 ^ 56);
+            for (int h = 0; h < H; h++) {
+                inc.stmAcc[h] += l0w[stmIdx][h];
+                inc.ntmAcc[h] += l0w[ntmIdx][h];
+            }
+        }
+
+        private void removePieceAbs(boolean isWhite, int pieceType, int sq) {
+            int c = isWhite ? 0 : 1;
+            int pc = 64 * pieceType;
+            int sqA1 = sq ^ 56;
+            int stmIdx = (c == 0 ? 0 : 384) + pc + sqA1;
+            int ntmIdx = (c == 0 ? 384 : 0) + pc + (sqA1 ^ 56);
+            for (int h = 0; h < H; h++) {
+                inc.stmAcc[h] -= l0w[stmIdx][h];
+                inc.ntmAcc[h] -= l0w[ntmIdx][h];
+            }
+        }
+
+        void onMoveApplied(Zug z, MoveInfo info) {
+            if (inc == null) return;
+            int from = infoSquareFrom(z);
+            int to = infoSquareTo(z);
+            boolean moverW = info.movingPieceWhite;
+            int movingType = info.movingPieceType;
+
+            // Remove moving piece at from
+            removePieceAbs(moverW, movingType, from);
+
+            // Handle captures (normal or en passant)
+            if (!info.squareMovedOntoWasEmpty || info.wasEnPassant) {
+                int capSq;
+                if (info.wasEnPassant && info.capEnPassantBauerCoords != null) {
+                    capSq = info.capEnPassantBauerCoords.y * 8 + info.capEnPassantBauerCoords.x;
+                } else {
+                    capSq = to;
+                }
+                removePieceAbs(info.capturedPieceWhite, info.capturedPieceType, capSq);
+            }
+
+            // Handle rook move in castling
+            if (info.rookMoved) {
+                int y = moverW ? 7 : 0;
+                int rookFrom = Bitboards.sq(info.rookStartX, y);
+                int rookTo   = Bitboards.sq(info.rookEndX, y);
+                removePieceAbs(moverW, 3, rookFrom);
+                addPieceAbs(moverW, 3, rookTo);
+            }
+
+            // Add moving piece at destination (promotion if any)
+            if (info.wasPromotion) {
+                addPieceAbs(moverW, info.promotionType, to);
+            } else {
+                addPieceAbs(moverW, movingType, to);
+            }
+        }
+
+        void onMoveUndone(Zug z, MoveInfo info) {
+            if (inc == null) return;
+            int from = infoSquareFrom(z);
+            int to = infoSquareTo(z);
+            boolean moverW = info.movingPieceWhite;
+            int movingType = info.movingPieceType;
+
+            // Undo moving piece at destination
+            if (info.wasPromotion) {
+                removePieceAbs(moverW, info.promotionType, to);
+                addPieceAbs(moverW, 0, from); // restore pawn
+            } else {
+                removePieceAbs(moverW, movingType, to);
+                addPieceAbs(moverW, movingType, from);
+            }
+
+            // Restore rook for castling
+            if (info.rookMoved) {
+                int y = moverW ? 7 : 0;
+                int rookFrom = Bitboards.sq(info.rookStartX, y);
+                int rookTo   = Bitboards.sq(info.rookEndX, y);
+                removePieceAbs(moverW, 3, rookTo);
+                addPieceAbs(moverW, 3, rookFrom);
+            }
+
+            // Restore captured piece
+            if (info.wasEnPassant && info.capEnPassantBauerCoords != null) {
+                int capSq = info.capEnPassantBauerCoords.y * 8 + info.capEnPassantBauerCoords.x;
+                addPieceAbs(!moverW, 0, capSq);
+            } else if (!info.squareMovedOntoWasEmpty) {
+                addPieceAbs(info.capturedPieceWhite, info.capturedPieceType, to);
+            }
+        }
+
+        private static int infoSquareFrom(Zug z) { return z.startY * 8 + z.startX; }
+        private static int infoSquareTo(Zug z) { return z.endY * 8 + z.endX; }
     }
 }

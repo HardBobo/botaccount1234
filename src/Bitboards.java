@@ -297,6 +297,9 @@ public class Bitboards {
 
         updateOcc();
 
+        // Update NNUE incremental accumulators if available
+        try { if (Nnue.isUsable()) Nnue.onMoveApplied(z, info); } catch (Throwable ignored) {}
+
         // No mirror updates
     }
 
@@ -350,6 +353,9 @@ public class Bitboards {
         setRightsFromMask(info.oldCastlingRightsMask);
         epSquare = info.oldEpSquare;
         updateOcc();
+
+        // Update NNUE incremental accumulators if available
+        try { if (Nnue.isUsable()) Nnue.onMoveUndone(z, info); } catch (Throwable ignored) {}
 
         // No mirror updates
     }
