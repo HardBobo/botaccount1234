@@ -173,60 +173,60 @@ public final class Nnue {
         }
 
         int evaluate(BoardApi board, String mappingMode) {
-            // Accumulators start from bias
-            short[] us = new short[H];
-            short[] them = new short[H];
-            System.arraycopy(l0b, 0, us, 0, H);
-            System.arraycopy(l0b, 0, them, 0, H);
+            // Initialize accumulators with bias (exact copy from bullet_eval)
+            short[] stmAcc = new short[H];
+            short[] ntmAcc = new short[H];
+            System.arraycopy(l0b, 0, stmAcc, 0, H);
+            System.arraycopy(l0b, 0, ntmAcc, 0, H);
 
-            final boolean stmWhite = board.sideToMoveIsWhite();
+            // Use exact bullet Chess768 feature mapping (ignore mappingMode)
             board.forEachPiece((piece, sq) -> {
-                int pt = piece.typeIndex; // 0..5
-                boolean pieceWhite = piece.isWhite;
-
-                if ("premirror".equals(mappingMode)) {
-                    // Legacy attempt: pre-mirror for stm black, ntm uses original sq
-                    int sqRel = stmWhite ? sq : (sq ^ 56);
-                    int cRel = (pieceWhite == stmWhite) ? 0 : 1; // 0=us,1=them
-                    int stmIndex = (cRel == 1 ? 384 : 0) + 64 * pt + sqRel;
-                    int ntmIndex = (cRel == 1 ? 0   : 384) + 64 * pt + (sqRel ^ 56);
-                    int baseStm = H * stmIndex;
-                    int baseNtm = H * ntmIndex;
-                    for (int r = 0; r < H; r++) {
-                        us[r]   = (short)(us[r]   + l0w[baseStm + r]);
-                        them[r] = (short)(them[r] + l0w[baseNtm + r]);
-                    }
-                } else {
-                    // Fixed: exact bullet Chess768 mapping
-                    // piece encoding: bit 3 = color (0=white, 1=black), bits 0-2 = type
-                    int bulletPiece = (pieceWhite ? 0 : 8) + pt; // recreate bullet piece format
-                    int c = (bulletPiece & 8) > 0 ? 1 : 0; // color: 0=white, 1=black  
-                    int pc = 64 * (bulletPiece & 7); // type offset
-                    
-                    int stmIndex = (c == 0 ? 0 : 384) + pc + sq;      // [0,384][c] + pc + sq
-                    int ntmIndex = (c == 0 ? 384 : 0) + pc + (sq ^ 56); // [384,0][c] + pc + (sq^56)
-                    
-                    int baseStm = H * stmIndex;
-                    int baseNtm = H * ntmIndex;
-                    for (int r = 0; r < H; r++) {
-                        us[r]   = (short)(us[r]   + l0w[baseStm + r]);
-                        them[r] = (short)(them[r] + l0w[baseNtm + r]);
-                    }
+                // Recreate bullet piece encoding: bit 3 = color, bits 0-2 = type 
+                int bulletPiece = (piece.isWhite ? 0 : 8) + piece.typeIndex;
+                
+                // Extract color and piece type offset exactly as bullet does
+                int c = (bulletPiece & 8) > 0 ? 1 : 0; // 0=white, 1=black
+                int pc = 64 * (bulletPiece & 7);       // piece type offset
+                
+                // Calculate STM and NTM indices exactly as bullet Chess768
+                int stmIdx = (c == 0 ? 0 : 384) + pc + sq;      // [0,384][c] + pc + sq
+                int ntmIdx = (c == 0 ? 384 : 0) + pc + (sq ^ 56); // [384,0][c] + pc + (sq^56)
+                
+                // Add features to accumulators (column-major: H * feature + row)
+                for (int h = 0; h < H; h++) {
+                    stmAcc[h] += l0w[H * stmIdx + h];
+                    ntmAcc[h] += l0w[H * ntmIdx + h];
                 }
             });
 
-            long acc = 0;
-            for (int r = 0; r < H; r++) {
-                acc += (long) screlu(us[r])   * (long) l1w[r];
-                acc += (long) screlu(them[r]) * (long) l1w[H + r];
+            // Compute final evaluation exactly as bullet_eval
+            long output = 0;
+            
+            // STM accumulator part
+            for (int h = 0; h < H; h++) {
+                output += (long)screlu(stmAcc[h]) * (long)l1w[h];
             }
-            acc /= QA;                  // reduce from QA*QA*QB to QA*QB
-            acc += l1b;                 // still QA*QB units
-            acc *= SCALE;               // scale
-            acc /= (long) QA * (long) QB; // to centipawns
-            if (acc > Integer.MAX_VALUE) acc = Integer.MAX_VALUE;
-            if (acc < Integer.MIN_VALUE) acc = Integer.MIN_VALUE;
-            return (int) acc;
+            
+            // NTM accumulator part  
+            for (int h = 0; h < H; h++) {
+                output += (long)screlu(ntmAcc[h]) * (long)l1w[H + h];
+            }
+            
+            // Reduce quantization from QA*QA*QB to QA*QB
+            output /= QA;
+            
+            // Add bias
+            output += l1b;
+            
+            // Apply eval scale and remove quantization
+            output *= SCALE;
+            output /= (long)QA * (long)QB;
+            
+            // Clamp to int range
+            if (output > Integer.MAX_VALUE) output = Integer.MAX_VALUE;
+            if (output < Integer.MIN_VALUE) output = Integer.MIN_VALUE;
+            
+            return (int)output;
         }
 
         private static int screlu(short x) {
