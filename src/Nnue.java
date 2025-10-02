@@ -27,10 +27,6 @@ public final class Nnue {
         return usable;
     }
 
-    public static String getLoadedPath() {
-        return loadedPath;
-    }
-
     /** Attempt to auto-load NNUE from config/env; safe to call multiple times. */
     public static synchronized void tryAutoLoad() {
         Config cfg = Config.getInstance();
@@ -88,7 +84,7 @@ public final class Nnue {
             throw new IllegalStateException("NNUE evaluate called but NNUE is not usable");
         }
         BoardApi boardApi = new BoardAdapter(isWhite);
-        int cp = NET.evaluate(boardApi, MAPPING);
+        int cp = NET.evaluate(boardApi);
         return FLIP_SIGN ? -cp : cp;
     }
 
@@ -206,7 +202,7 @@ public final class Nnue {
             return new NnueNetwork(H, l0w, l0b, l1w, l1b);
         }
 
-        int evaluate(BoardApi board, String mappingMode) {
+        int evaluate(BoardApi board) {
             // If incremental accumulators are available, use them (absolute, STM-independent)
             if (inc != null) {
                 boolean whiteToMove = board.sideToMoveIsWhite();
