@@ -169,7 +169,8 @@ public final class Nnue {
 
             // Infer H from totalBytes with allowance for 64-byte padding at file end.
             // Data layout (shorts): 768*H + H + 2H + 1 = 771H + 1
-            // Required bytes: 2 * (771H + 1); padding: totalBytes - requiredBytes must be >= 0 and % 64 == 0
+            // Required bytes: 2 * (771H + 1); the writer pads to the next 64-byte boundary,
+            // so pad = totalBytes - requiredBytes is in [0, 63].
             int H = -1;
             for (int h = 1; h <= 4096; h++) {
                 long requiredBytes = 2L * (771L * h + 1L);
