@@ -62,7 +62,8 @@ public final class Nnue {
             NET = net;
             loadedPath = f.getAbsolutePath();
             usable = true;
-            System.out.println("NNUE loaded: H=" + net.H + " from " + loadedPath);
+            // Print requested simplified load message for easy parsing
+            System.out.println("nnue loaded H : " + net.H);
             return true;
         } catch (Exception e) {
             System.err.println("Error loading NNUE file: " + e.getMessage());
@@ -165,14 +166,19 @@ public final class Nnue {
 
         static NnueNetwork loadRaw(ByteBuffer bb) {
             int totalBytes = bb.remaining();
-            int bytesNoPad = totalBytes - (totalBytes % 64); // quantised.bin is padded to 64 bytes
-            int totalShorts = bytesNoPad / 2;
-            // layout shorts = 768*H + H + 2H + 1 = 771H + 1
-            if (totalShorts < 1 || (totalShorts - 1) % 771 != 0) {
-                // fallback to H=128 if inference fails
-                return loadRawWithH(bb, 128);
+
+            // Infer H from totalBytes with allowance for 64-byte padding at file end.
+            // Data layout (shorts): 768*H + H + 2H + 1 = 771H + 1
+            // Required bytes: 2 * (771H + 1); padding: totalBytes - requiredBytes must be >= 0 and % 64 == 0
+            int H = -1;
+            for (int h = 1; h <= 4096; h++) {
+                long requiredBytes = 2L * (771L * h + 1L);
+                long pad = (long) totalBytes - requiredBytes;
+                if (pad >= 0 && (pad % 64L) == 0L) { H = h; break; }
             }
-            int H = (totalShorts - 1) / 771;
+            if (H < 0) {
+                throw new IllegalArgumentException("Cannot infer NNUE hidden size (H) from file size " + totalBytes);
+            }
             return loadRawWithH(bb, H);
         }
 
