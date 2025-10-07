@@ -174,7 +174,7 @@ public final class Nnue {
             for (int h = 1; h <= 4096; h++) {
                 long requiredBytes = 2L * (771L * h + 1L);
                 long pad = (long) totalBytes - requiredBytes;
-                if (pad >= 0 && (pad % 64L) == 0L) { H = h; break; }
+                if (pad >= 0 && pad < 64) { H = h; break; }
             }
             if (H < 0) {
                 throw new IllegalArgumentException("Cannot infer NNUE hidden size (H) from file size " + totalBytes);
