@@ -5,9 +5,7 @@ public class UCIWrapper {
 
     static String[] moveList;
     static String moves;
-    static int moveCount;
     public static long startHash;
-    private static boolean baseWhiteToMove = true; // side to move at start of current position
 
     // UCI time controls (milliseconds)
     private static long wtimeMs = -1;
@@ -48,12 +46,12 @@ public class UCIWrapper {
             else if (command.startsWith("position")) {
 
                 // UCI 'position' provides a full position description. Reset incremental state.
-                resetVariablesNoWhiteToMove();
+                resetVariables();
 
                 if (command.contains("startpos")) {
                     // Start position
                     Board.setupStartPosition();
-                    baseWhiteToMove = true;
+                    Board.whiteToMove = true;
                     // Do not clear TT here; use ucinewgame for a hard reset
                     startHash = Zobrist.computeHash(Board.bitboards, true);
                 }
@@ -73,27 +71,22 @@ public class UCIWrapper {
                 parseUciTimeParameters(command);
 
                 // Determine side to move: start side flipped by number of moves applied
-                boolean whiteToMove = (moveCount % 2 == 0) == baseWhiteToMove;
+                boolean whiteToMove = Board.whiteToMove;
 
                 // Try opening move first, else search
-                Zug best = OpeningDictionary.getNextOpeningMove(moves == null ? "" : moves);
-                if(best == null){
-                    if (whiteToMove) {
-                        if (wtimeMs >= 0 && wtimeMs <= 4000 && wincMs <= 500) {
-                            best = panicBest(true);
-                        } else {
-                            long thinkMs = TimeManager.computeThinkTimeMs(wtimeMs, wincMs);
-                            best = MoveFinder.iterativeDeepening(true, startHash, thinkMs);
-                        }
-                    } else {
-                        if (btimeMs >= 0 && btimeMs <= 4000 && bincMs <= 500) {
-                            best = panicBest(false);
-                        } else {
-                            long thinkMs = TimeManager.computeThinkTimeMs(btimeMs, bincMs);
-                            best = MoveFinder.iterativeDeepening(false, startHash, thinkMs);
-                        }
-                    }
+                Zug best;
+                if (whiteToMove) {
+
+                    long thinkMs = TimeManager.computeThinkTimeMs(wtimeMs, wincMs);
+                    best = MoveFinder.iterativeDeepening(true, startHash, thinkMs);
+
+                } else {
+
+                    long thinkMs = TimeManager.computeThinkTimeMs(btimeMs, bincMs);
+                    best = MoveFinder.iterativeDeepening(false, startHash, thinkMs);
+
                 }
+
                 System.out.println("bestmove " + best.processZug());
             }
             else if (command.equals("quit")) {
@@ -102,15 +95,9 @@ public class UCIWrapper {
         }
     }
     private static void resetVariables(){
-        baseWhiteToMove = true;
+        Board.whiteToMove = true;
         moves = "";
         moveList = new String[0];
-        moveCount = 0;
-    }
-    private static void resetVariablesNoWhiteToMove(){
-        moves = "";
-        moveList = new String[0];
-        moveCount = 0;
     }
     private static void loadPosFromFen(String command){
         String fen = command.substring(command.indexOf("fen") + 4);
@@ -121,47 +108,64 @@ public class UCIWrapper {
         // detect side to move from FEN
         String[] parts = fen.split(" ");
         if (parts.length > 1) {
-            baseWhiteToMove = parts[1].equals("w");
+            Board.whiteToMove = parts[1].equals("w");
         } else {
-            baseWhiteToMove = true;
+            Board.whiteToMove = true;
         }
-        startHash = Zobrist.computeHash(Board.bitboards, baseWhiteToMove);
+        startHash = Zobrist.computeHash(Board.bitboards, Board.whiteToMove);
     }
     private static void syncGameStateBoard(String command){
         moves = command.substring(command.indexOf("moves") + 6).trim();
         moveList = moves.isEmpty() ? new String[0] : moves.split(" ");
-        moveCount = moveList.length;
 
         // apply the moves from the described root
         for (int i = 0; i < moveList.length; i++) {
             Zug zug = new Zug(moveList[i]);
             MoveInfo info = MoveFinder.saveMoveInfo(zug);
             startHash = MoveFinder.doMoveUpdateHash(zug, info, startHash);
+            Board.whiteToMove = !Board.whiteToMove;
         }
     }
-    private static void parseUciTimeParameters(String command){
+    private static void parseUciTimeParameters(String command) {
         String[] parts = command.split("\\s+");
         for (int i = 1; i < parts.length; i++) {
             switch (parts[i]) {
                 case "wtime":
-                    if (i + 1 < parts.length) { try { wtimeMs = Long.parseLong(parts[++i]); } catch (NumberFormatException ignored) {} }
+                    if (i + 1 < parts.length) {
+                        try {
+                            wtimeMs = Long.parseLong(parts[++i]);
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
                     break;
                 case "btime":
-                    if (i + 1 < parts.length) { try { btimeMs = Long.parseLong(parts[++i]); } catch (NumberFormatException ignored) {} }
+                    if (i + 1 < parts.length) {
+                        try {
+                            btimeMs = Long.parseLong(parts[++i]);
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
                     break;
                 case "winc":
-                    if (i + 1 < parts.length) { try { wincMs = Long.parseLong(parts[++i]); } catch (NumberFormatException ignored) {} }
+                    if (i + 1 < parts.length) {
+                        try {
+                            wincMs = Long.parseLong(parts[++i]);
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
                     break;
                 case "binc":
-                    if (i + 1 < parts.length) { try { bincMs = Long.parseLong(parts[++i]); } catch (NumberFormatException ignored) {} }
+                    if (i + 1 < parts.length) {
+                        try {
+                            bincMs = Long.parseLong(parts[++i]);
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
                     break;
                 default:
                     // ignore other go params for now
                     break;
             }
         }
-    }
-    private static Zug panicBest(boolean whiteToMove){
-        return MoveFinder.searchToDepth(whiteToMove, startHash, 2);
     }
 }

@@ -220,15 +220,10 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                                                     long incMs = whiteIncMs > 0 ? whiteIncMs : Math.max(0, incrementSeconds) * 1000L;
 
                                                     Zug best;
-                                                    if (timeLeft >= 0 && timeLeft <= 4000 && incMs <= 1000) {
-                                                        if(timeLeft <= 2000)
-                                                            best = ultraPanicBest(isWhite);
-                                                        else
-                                                            best = panicBest(isWhite);
-                                                    } else {
-                                                        long thinkMs = TimeManager.computeThinkTimeMs(timeLeft, incMs);
-                                                        best = MoveFinder.iterativeDeepening(true, startHash, thinkMs);
-                                                    }
+
+                                                    long thinkMs = TimeManager.computeThinkTimeMs(timeLeft, incMs);
+                                                    best = MoveFinder.iterativeDeepening(true, startHash, thinkMs);
+
                                                     playMove(gameId, best.processZug());
                                                 }
                                             }
@@ -242,12 +237,10 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                                                     long incMs = blackIncMs > 0 ? blackIncMs : Math.max(0, incrementSeconds) * 1000L;
 
                                                     Zug best;
-                                                    if (timeLeft >= 0 && timeLeft <= 4000 && incMs <= 1000) {
-                                                        best = panicBest(isWhite);
-                                                    } else {
-                                                        long thinkMs = TimeManager.computeThinkTimeMs(timeLeft, incMs);
-                                                        best = MoveFinder.iterativeDeepening(false, startHash, thinkMs);
-                                                    }
+
+                                                    long thinkMs = TimeManager.computeThinkTimeMs(timeLeft, incMs);
+                                                    best = MoveFinder.iterativeDeepening(false, startHash, thinkMs);
+
                                                     playMove(gameId, best.processZug());
                                                 }
                                             }
