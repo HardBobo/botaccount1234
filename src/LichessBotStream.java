@@ -280,13 +280,32 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
         if (moves == null || moves.isEmpty()) {
             return "white".equals(myColor);
         }
-        int moveCount = moves.split(" ").length;
+        int moveCount = moves.trim().split("\\s+").length;
         return ("white".equals(myColor) && moveCount % 2 == 0)
                 || ("black".equals(myColor) && moveCount % 2 == 1);
     }
 
-    private static void doFirstMove(String gameId) throws IOException {
-        Zug zug = Objects.requireNonNull(OpeningDictionary.getNextOpeningMove(""));
+    private static void doFirstMove(String gameId) {
+        Zug zug = null;
+        try {
+            zug = OpeningDictionary.getNextOpeningMove("");
+        } catch (Exception e) {
+            System.err.println("[Book] Failed to read opening book for first move: " + e.getMessage());
+        }
+
+        if (zug == null) {
+            // Fallback to a quick search if the opening book is unavailable.
+            long timeLeft = (whiteTimeMs > 0) ? whiteTimeMs : (long) Math.max(0, baseTimeSeconds) * 1000L;
+            long incMs = (whiteIncMs > 0) ? whiteIncMs : Math.max(0, incrementSeconds) * 1000L;
+            long thinkMs = TimeManager.computeThinkTimeMs(timeLeft, incMs);
+            zug = MoveFinder.iterativeDeepening(true, startHash, thinkMs);
+        }
+
+        if (zug == null) {
+            System.err.println("No move found for first move (no legal moves?)");
+            return;
+        }
+
         playMove(gameId, zug.processZug());
         MoveInfo info = MoveFinder.saveMoveInfo(zug);
         startHash = MoveFinder.doMoveUpdateHash(zug, info, startHash);
@@ -307,12 +326,13 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
 
     private static void syncLichessToBoard(JSONObject event){
         moves = event.getString("moves"); // bisherige Züge geuptdated
-        moveList = moves.isEmpty() ? new String[0] : moves.split(" "); // array auch
+        moveList = moves.isEmpty() ? new String[0] : moves.trim().split("\\s+"); // array auch
         moveCount = moveList.length; // auch anzahl
         if (moveCount > lastProcessedMoveCount) { // stellungsupdate
             Zug zug;
             for (int i = lastProcessedMoveCount; i < moveList.length; i++) {
                 String raw = moveList[i];
+                if (raw == null || raw.isEmpty()) continue;
                 String norm = normalizeCastleUci(raw);
                 if (!raw.equals(norm)) {
                     System.out.println("[Sync] Normalized castling move: " + raw + " -> " + norm);
@@ -345,16 +365,20 @@ else if ("gameFull".equals(type)) { // erster state nach gamestart
                 String prefix = "" + sFile + sRank + newFile + eRank;
                 return (lan.length() > 4) ? prefix + lan.substring(4) : prefix;
             }
-            
+
         }
         return lan;
     }
 
-    private static boolean playOpeningMove(String gameId) throws IOException {
-        Zug zug = OpeningDictionary.getNextOpeningMove(moves);
-        if(zug != null){
-            playMove(gameId, zug.processZug());
-            return true;
+    private static boolean playOpeningMove(String gameId) {
+        try {
+            Zug zug = OpeningDictionary.getNextOpeningMove(moves);
+            if (zug != null) {
+                playMove(gameId, zug.processZug());
+                return true;
+            }
+        } catch (Exception e) {
+            System.err.println("[Book] Failed to pick opening move: " + e.getMessage());
         }
         return false;
     }
