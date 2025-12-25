@@ -223,7 +223,7 @@ public class MoveFinder {
 
             long oldHash = hash;
             NullState ns = new  NullState();
-            hash = doNullMoveUpdateHash(hash, ns);
+            hash = doNullMoveUpdateHash(hash, ns, isWhite);
             int nullMoveScore = -negamax(depth - 1 - nmpR, -beta, -beta + 1, !isWhite, hash, false);
             undoNullMove(ns);
             hash = oldHash;
@@ -464,11 +464,14 @@ public class MoveFinder {
         return hash;
     }
 
-    public static long doNullMoveUpdateHash(long hash, NullState ns) {
-        // Save old EP file from bitboards and clear EP for null move
+    public static long doNullMoveUpdateHash(long hash, NullState ns, boolean whiteToMove) {
+        // Save old EP square and clear EP for null move.
+        // IMPORTANT: computeHash() only includes an en-passant key if the side to move has a pawn that can capture.
+        // So for null moves we must XOR-out the EP key using the same semantics, not just epSquare's file.
+        int epFileHashed = Zobrist.getEnPassantFileFromBB(Board.bitboards, whiteToMove);
         ns.oldEpSquare = Board.bitboards.epSquare;
         Board.bitboards.epSquare = -1;
-        return Zobrist.nullMoveHashUpdate(hash, ns.oldEpSquare == -1 ? -1 : Bitboards.xOf(ns.oldEpSquare));
+        return Zobrist.nullMoveHashUpdate(hash, epFileHashed);
     }
 
     public static void undoNullMove(NullState ns) {
