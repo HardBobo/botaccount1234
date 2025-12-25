@@ -65,9 +65,26 @@ public class LichessBotStream {
                         }
                         System.out.println("Gefundener Typ: " + type);
 if ("challenge".equals(type)) { //challenge gefunden → automatisch annehmen
-                            // Zeitkontrolle aus Challenge extrahieren (falls vorhanden)
                             try {
                                 JSONObject challenge = obj.getJSONObject("challenge"); // challengeid auslesen
+                                String challengeId = challenge.getString("id");
+
+                                // Lichess tells us if the challenge is compatible with bots.
+                                // If compat.bot is false, the API will reject accept requests.
+                                boolean botCompat = true;
+                                try {
+                                    if (obj.has("compat")) {
+                                        botCompat = obj.getJSONObject("compat").optBoolean("bot", true);
+                                    }
+                                } catch (Exception ignored) {
+                                }
+                                if (!botCompat) {
+                                    System.out.println("[Challenge] Not bot-compatible; declining challenge " + challengeId);
+                                    declineChallenge(challengeId);
+                                    return;
+                                }
+
+                                // Zeitkontrolle aus Challenge extrahieren (falls vorhanden)
                                 if (challenge.has("timeControl")) {
                                     JSONObject tc = challenge.getJSONObject("timeControl");
                                     // limit ist Basiszeit in Sekunden, increment in Sekunden
@@ -75,10 +92,10 @@ if ("challenge".equals(type)) { //challenge gefunden → automatisch annehmen
                                     pendingIncrementSeconds = tc.optInt("increment", 0);
                                     System.out.println("[TC] Challenge TimeControl: base=" + pendingBaseTimeSeconds + "s, inc=" + pendingIncrementSeconds + "s");
                                 }
-                                String challengeId = challenge.getString("id");
+
                                 acceptChallenge(challengeId);
                             } catch (Exception e) {
-                                System.err.println("Fehler beim Lesen der Zeitkontrolle aus Challenge: " + e.getMessage());
+                                System.err.println("Fehler beim Lesen/Annehmen der Challenge: " + e.getMessage());
                             }
                         }
 if("gameStart".equals(type)) { //wenn spielstart in gamestream übergehen
@@ -120,8 +137,34 @@ if("gameStart".equals(type)) { //wenn spielstart in gamestream übergehen
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .build();
 
-        client.sendAsync(request, HttpResponse.BodyHandlers.discarding())
-                .thenAccept(resp -> System.out.println("Challenge angenommen: " + challengeId));
+        client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenAccept(resp -> {
+                    if (resp.statusCode() == 200) {
+                        System.out.println("Challenge angenommen: " + challengeId);
+                    } else {
+                        System.err.println("Challenge accept failed (" + resp.statusCode() + ") for " + challengeId);
+                        System.err.println(resp.body());
+                    }
+                });
+    }
+
+    private static void declineChallenge(String challengeId) {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://lichess.org/api/challenge/" + challengeId + "/decline"))
+                .header("Authorization", "Bearer " + config.getLichessToken())
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+
+        client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenAccept(resp -> {
+                    if (resp.statusCode() == 200) {
+                        System.out.println("Challenge declined: " + challengeId);
+                    } else {
+                        System.err.println("Challenge decline failed (" + resp.statusCode() + ") for " + challengeId);
+                        System.err.println(resp.body());
+                    }
+                });
     }
     public static void startGameStream(String gameId) { // gamestream (wichtig)
         HttpClient client = HttpClient.newHttpClient();
