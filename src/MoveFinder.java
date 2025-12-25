@@ -20,7 +20,8 @@ public class MoveFinder {
     static final int NMP_MIN_DEPTH = 3;
     static final int REDUCTION_NMP = 2;
 
-    static Map<Long, TTEntry> transpositionTable = new HashMap<>();
+    // Fixed-size TT (fast + bounded memory). Size configurable via Config (tt.size.mb / TT_SIZE_MB).
+    static final TranspositionTable tt = new TranspositionTable(Config.getInstance().getTtSizeMB());
 
     // Node counter for benchmarking
     private static long nodes;
@@ -40,9 +41,12 @@ public class MoveFinder {
         if (orderedMoves.isEmpty()) return new SearchResult(new ArrayList<>(), 0, false);
 
         // Prefer TT best move at root if available
-        TTEntry rootTT = transpositionTable.get(hash);
-        if (rootTT != null && rootTT.isValid && rootTT.bestMove != null) {
-            moveToFront(orderedMoves, rootTT.bestMove);
+        int rootTtIdx = tt.probe(hash);
+        if (rootTtIdx != -1) {
+            int bm = tt.moveAt(rootTtIdx);
+            if (bm != 0) {
+                moveToFront(orderedMoves, bm);
+            }
         }
 
         // List to hold moves with their scores (only fully searched moves)
@@ -164,10 +168,12 @@ public class MoveFinder {
 
         int alphaOrig = alpha;
 
-        TTEntry entry = transpositionTable.get(hash);
+        int ttIdx = tt.probe(hash);
 
-        if (entry != null && entry.isValid && entry.depth >= depth) {
-            if (ttLookup(alpha, beta, entry)) {return entry.value;}
+        if (ttIdx != -1 && tt.depthAt(ttIdx) >= depth) {
+            int ttVal = tt.valueAt(ttIdx);
+            int ttFlag = tt.flagAt(ttIdx);
+            if (ttLookup(alpha, beta, ttVal, ttFlag)) { return ttVal; }
         }
 
         if (depth == 0){
@@ -229,7 +235,7 @@ public class MoveFinder {
             hash = oldHash;
 
             if(nullMoveScore >= beta) {
-                transpositionTable.put(hash, new TTEntry(nullMoveScore, depth, LOWERBOUND));
+                tt.store(hash, depth, LOWERBOUND, nullMoveScore, 0);
                 return beta;
             }
         }
@@ -237,8 +243,11 @@ public class MoveFinder {
         MoveOrdering.orderMoves(pseudoLegalMoves, isWhite);
 
         // If we have a TT entry for this node, try its best move first
-        if (entry != null && entry.isValid && entry.bestMove != null) {
-            moveToFront(pseudoLegalMoves, entry.bestMove);
+        if (ttIdx != -1) {
+            int bm = tt.moveAt(ttIdx);
+            if (bm != 0) {
+                moveToFront(pseudoLegalMoves, bm);
+            }
         }
 
         int value = Integer.MIN_VALUE;
@@ -330,7 +339,7 @@ public class MoveFinder {
         }
 
         if (!timeUp) {
-            transpositionTable.put(hash, new TTEntry(value, depth, flag, bestMove));
+            tt.store(hash, depth, flag, value, TranspositionTable.encodeMove(bestMove));
         }
 
         return value;
@@ -347,9 +356,11 @@ public class MoveFinder {
         // Near mate bounds guard for pruning heuristics
         boolean nearMateBounds = (alpha <= -(100000 - 200)) || (beta >= (100000 - 200));
         
-        TTEntry entry = transpositionTable.get(hash);
-        if (entry != null && entry.isValid) {
-            if (ttLookup(alpha, beta, entry)) {return entry.value;}
+        int ttIdx = tt.probe(hash);
+        if (ttIdx != -1) {
+            int ttVal = tt.valueAt(ttIdx);
+            int ttFlag = tt.flagAt(ttIdx);
+            if (ttLookup(alpha, beta, ttVal, ttFlag)) { return ttVal; }
         }
 
         int alphaOrig = alpha;
@@ -388,8 +399,11 @@ public class MoveFinder {
         MoveOrdering.orderMoves(forcingMoves, isWhite);
 
         // If we have a TT entry for this node, try its best move first
-        if (entry != null && entry.isValid && entry.bestMove != null) {
-            moveToFront(forcingMoves, entry.bestMove);
+        if (ttIdx != -1) {
+            int bm = tt.moveAt(ttIdx);
+            if (bm != 0) {
+                moveToFront(forcingMoves, bm);
+            }
         }
 
         int flag;
@@ -414,7 +428,7 @@ public class MoveFinder {
 
                 flag = LOWERBOUND;
                 if (!timeUp) {
-                    transpositionTable.put(hash, new TTEntry(score, 0, flag, zug));
+                    tt.store(hash, 0, flag, score, TranspositionTable.encodeMove(zug));
                 }
                 return score;
             }
@@ -429,17 +443,17 @@ public class MoveFinder {
         else flag = EXACT;
 
         if (!timeUp) {
-            transpositionTable.put(hash, new TTEntry(best_value, 0, flag, bestMove));
+            tt.store(hash, 0, flag, best_value, TranspositionTable.encodeMove(bestMove));
         }
         return best_value;
     }
 
-    private static boolean ttLookup(int alpha, int beta, TTEntry entry) {
-        if (entry.flag == EXACT) {
+    private static boolean ttLookup(int alpha, int beta, int value, int flag) {
+        if (flag == EXACT) {
             return true;
-        } else if (entry.flag == LOWERBOUND && entry.value >= beta) {
+        } else if (flag == LOWERBOUND && value >= beta) {
             return true;
-        } else if (entry.flag == UPPERBOUND && entry.value <= alpha) {
+        } else if (flag == UPPERBOUND && value <= alpha) {
             return true;
         }
         return false;
@@ -497,6 +511,7 @@ public class MoveFinder {
 
     // Time-limited iterative deepening; search runs until deadline and returns best-so-far
     public static Zug iterativeDeepening (boolean isWhite, long hash, long timeLimitMs){
+        tt.newSearch();
         setSearchDeadline(System.currentTimeMillis() + Math.max(1, timeLimitMs));
 
         ArrayList<Zug> order = possibleMoves(isWhite);
@@ -575,6 +590,7 @@ public class MoveFinder {
 
     // Fixed-depth search utility used for low-time situations
     public static Zug searchToDepth(boolean isWhite, long hash, int depth) {
+        tt.newSearch();
         setSearchDeadline(Long.MAX_VALUE);
         ArrayList<Zug> order = possibleMoves(isWhite);
         if (order.isEmpty()) return null;
@@ -642,6 +658,32 @@ public class MoveFinder {
             if (sameMove(moves.get(i), target)) {
                 if (i > 0) {
                     Zug z = moves.remove(i);
+                    moves.add(0, z);
+                }
+                break;
+            }
+        }
+    }
+
+    // Variant that avoids allocating a temporary Zug when using TT best moves.
+    private static void moveToFront(List<Zug> moves, int moveCode) {
+        if (moves == null || moves.isEmpty() || moveCode == 0) return;
+
+        int from = moveCode & 63;
+        int to = (moveCode >>> 6) & 63;
+        int promo = (moveCode >>> 12) & 7;
+
+        int fx = from & 7;
+        int fy = from >>> 3;
+        int tx = to & 7;
+        int ty = to >>> 3;
+        char p = TranspositionTable.promoCharFromCode(promo);
+
+        for (int i = 0; i < moves.size(); i++) {
+            Zug z = moves.get(i);
+            if (z.startX == fx && z.startY == fy && z.endX == tx && z.endY == ty && z.promoteTo == p) {
+                if (i > 0) {
+                    moves.remove(i);
                     moves.add(0, z);
                 }
                 break;

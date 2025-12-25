@@ -21,7 +21,7 @@ public final class StartposDepth5Bench {
 
         // Legacy PST only
         Evaluation.setForcePstOnly(true);
-        MoveFinder.transpositionTable.clear();
+        MoveFinder.tt.clear();
         MoveFinder.resetNodeCounter();
         long start = System.nanoTime();
         int pstScore = MoveFinder.negamax(depth, -1000000, 1000000, Board.whiteToMove, 0L);
@@ -33,7 +33,7 @@ public final class StartposDepth5Bench {
         Evaluation.setForcePstOnly(false);
         // Rebuild NNUE incremental accumulators for startpos
         try { if (Nnue.isUsable()) Nnue.rebuildIncremental(); } catch (Throwable ignored) {}
-        MoveFinder.transpositionTable.clear();
+        MoveFinder.tt.clear();
         MoveFinder.resetNodeCounter();
         start = System.nanoTime();
         int nnueScore = MoveFinder.negamax(depth, -1000000, 1000000, Board.whiteToMove, 0L);

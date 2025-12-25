@@ -42,6 +42,9 @@ public class Config {
         // NNUE defaults
         defaultProps.setProperty("nnue.enabled", "false");
         defaultProps.setProperty("nnue.path", "nnue/quantised.bin");
+
+        // Engine TT defaults
+        defaultProps.setProperty("tt.size.mb", "64");
         
         try (FileOutputStream fos = new FileOutputStream(CONFIG_FILE)) {
             defaultProps.store(fos, "Bot Configuration - Replace YOUR_LICHESS_BOT_TOKEN_HERE with your actual token");
@@ -125,6 +128,34 @@ public class Config {
         String env = System.getenv("NNUE_MAPPING");
         String m = (env != null && !env.isEmpty()) ? env : properties.getProperty("nnue.mapping", "direct");
         return m.toLowerCase();
+    }
+
+    // --- Transposition Table configuration ---
+    public int getTtSizeMB() {
+        // Env override
+        String env = System.getenv("TT_SIZE_MB");
+        if (env != null && !env.isEmpty()) {
+            try {
+                int v = Integer.parseInt(env.trim());
+                return clampTtSize(v);
+            } catch (NumberFormatException ignored) {
+            }
+        }
+
+        // Properties fallback
+        String p = properties.getProperty("tt.size.mb", "64");
+        try {
+            int v = Integer.parseInt(p.trim());
+            return clampTtSize(v);
+        } catch (NumberFormatException ignored) {
+            return 64;
+        }
+    }
+
+    private static int clampTtSize(int mb) {
+        if (mb < 1) return 1;
+        if (mb > 4096) return 4096;
+        return mb;
     }
     
     public void validateConfiguration() {
